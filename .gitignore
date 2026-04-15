@@ -38,7 +38,6 @@ ENV/
 .flutter-plugins-dependencies
 .packages
 .pub-cache/
-.pub-cache/
 build/
 .android/
 .ios/

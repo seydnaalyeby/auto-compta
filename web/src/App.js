@@ -10,6 +10,7 @@ import CompteResultat from './components/Resultat/CompteResultat';
 import Bilan from './components/Bilan/Bilan';
 import Journal from './components/Journal/Journal';
 import Correction from './components/Correction/Correction';
+import FinancialIndicatorsDashboard from './components/FinancialIndicators/FinancialIndicatorsDashboard';
 
 function RouteProtegee({ children }) {
   const { user } = useAuth();
@@ -28,6 +29,7 @@ function AppRoutes() {
       <Route path="/bilan"           element={<RouteProtegee><Bilan /></RouteProtegee>} />
       <Route path="/journal"         element={<RouteProtegee><Journal /></RouteProtegee>} />
       <Route path="/correction"      element={<RouteProtegee><Correction /></RouteProtegee>} />
+      <Route path="/indicateurs-financiers" element={<RouteProtegee><FinancialIndicatorsDashboard /></RouteProtegee>} />
       <Route path="*"                element={<Navigate to="/dashboard" />} />
     </Routes>
   );

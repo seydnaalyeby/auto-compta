@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     'apps.operations',
     'apps.comptabilite',
     'apps.ia',
+    'apps.financial_indicators',
 ]
 
 MIDDLEWARE = [

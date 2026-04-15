@@ -10,6 +10,7 @@ const MENU = [
   { path: '/bilan',           icon: '📋',  label: 'Bilan' },
   { path: '/journal',         icon: '📝',  label: 'Journal Comptable' },
   { path: '/correction',      icon: '🔍',  label: 'Correction IA' },
+  { path: '/indicateurs-financiers', icon: '📊', label: 'Indicateurs Financiers' },
 ];
 
 export default function Layout({ children }) {
