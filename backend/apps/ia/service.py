@@ -175,14 +175,19 @@ def analyser_operation(texte: str) -> dict:
     """
     Analyse un texte en langage naturel et retourne les données comptables
     """
+    print(f"DEBUG: analyser_operation called with texte: '{texte}'")
+    
     try:
+        print("DEBUG: Attempting to use Gemini AI...")
         model = genai.GenerativeModel('gemini-2.5-flash')
         prompt = PROMPT_ANALYSE.format(
             plan_comptable=PLAN_COMPTABLE_MAURITANIEN,
             texte=texte
         )
+        print(f"DEBUG: Generated prompt length: {len(prompt)}")
         response = model.generate_content(prompt)
         texte_reponse = response.text.strip()
+        print(f"DEBUG: Gemini response: '{texte_reponse}'")
 
         # Nettoyer la réponse (enlever markdown si présent)
         if '```json' in texte_reponse:
@@ -190,20 +195,26 @@ def analyser_operation(texte: str) -> dict:
         elif '```' in texte_reponse:
             texte_reponse = texte_reponse.split('```')[1].split('```')[0].strip()
 
+        print(f"DEBUG: Cleaned response: '{texte_reponse}'")
         resultat = json.loads(texte_reponse)
+        print(f"DEBUG: Parsed JSON result: {resultat}")
         return resultat
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"DEBUG: JSON decode error: {e}")
         return {
             'succes': False,
-            'erreur': 'Réponse IA invalide - réessayez',
+            'erreur': f'Réponse IA invalide - réessayez. Erreur: {str(e)}',
             'questions': []
         }
     except Exception as e:
+        print(f"DEBUG: Exception in analyser_operation: {e}")
         # Fallback si l'API Gemini n'est pas disponible (quota dépassé)
         if "429" in str(e) or "quota" in str(e).lower():
+            print("DEBUG: Using fallback analysis due to quota/API issues")
             return _fallback_analysis(texte)
         else:
+            print(f"DEBUG: Returning error response: {str(e)}")
             return {"succes": False, "erreur": f"Erreur d'analyse: {str(e)}"}
 
 def _fallback_analysis(texte):

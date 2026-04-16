@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { saisirOperation } from '../../services/api';
+import { saisirOperationIA } from '../../services/api';
 
 export default function Saisie() {
   const [texte, setTexte] = useState('');
@@ -23,11 +23,27 @@ export default function Saisie() {
     setChargement(true);
     setErreur('');
     setResultat(null);
+    
+    console.log('DEBUG: Submitting saisie operation');
+    console.log('DEBUG: texte:', texte);
+    console.log('DEBUG: date_operation:', dateOp);
+    
     try {
-      const res = await saisirOperation({ texte, date_operation: dateOp });
+      const requestData = { texte, date_operation: dateOp };
+      console.log('DEBUG: Request data:', requestData);
+      
+      const res = await saisirOperationIA(requestData);
+      console.log('DEBUG: Response received:', res);
+      console.log('DEBUG: Response data:', res.data);
+      
       setResultat(res.data);
       setTexte('');
     } catch (err) {
+      console.log('DEBUG: Error occurred:', err);
+      console.log('DEBUG: Error response:', err.response);
+      console.log('DEBUG: Error status:', err.response?.status);
+      console.log('DEBUG: Error data:', err.response?.data);
+      
       setErreur(err.response?.data?.error || 'Erreur lors de l\'analyse');
     } finally {
       setChargement(false);

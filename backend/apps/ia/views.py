@@ -48,14 +48,27 @@ def saisir_operation_ai(request):
     """
     Analyse une opération en langage naturel et la sauvegarde
     """
+    print(f"DEBUG: saisir_operation_ai called")
+    print(f"DEBUG: Request data: {request.data}")
+    print(f"DEBUG: Request user: {request.user}")
+    
     texte = request.data.get('texte', '')
+    date_operation = request.data.get('date_operation', None)
+    
+    print(f"DEBUG: Extracted texte: '{texte}'")
+    print(f"DEBUG: Extracted date_operation: '{date_operation}'")
+    
     if not texte:
+        print("DEBUG: No texte provided, returning 400 error")
         return Response({'error': 'Aucun texte fourni'}, status=400)
 
+    print("DEBUG: Calling analyser_operation...")
     # Analyser l'opération avec l'IA
     analyse = analyser_operation(texte)
+    print(f"DEBUG: Analysis result: {analyse}")
     
     if not analyse.get('succes', False):
+        print("DEBUG: Analysis failed, returning error response")
         return Response({
             'succes': False,
             'erreur': analyse.get('erreur', 'Erreur d\'analyse'),
@@ -64,6 +77,14 @@ def saisir_operation_ai(request):
 
     try:
         # Créer l'opération
+        operation_date = timezone.now().date()
+        if date_operation:
+            try:
+                from datetime import datetime
+                operation_date = datetime.strptime(date_operation, '%Y-%m-%d').date()
+            except ValueError:
+                pass  # Keep current date if parsing fails
+                
         operation = Operation.objects.create(
             utilisateur=request.user,
             type_operation=analyse['type_operation'],
@@ -71,7 +92,7 @@ def saisir_operation_ai(request):
             montant=Decimal(str(analyse['montant'])),
             moyen_paiement=analyse['moyen_paiement'],
             categorie=analyse.get('categorie', ''),
-            date_operation=timezone.now().date(),
+            date_operation=operation_date,
             traitee_par_ia=True
         )
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import axios from 'axios';
+import API from '../../services/api';
 import './FinancialIndicatorsDashboard.css';
 
 const FinancialIndicatorsDashboard = () => {
@@ -95,13 +95,7 @@ const FinancialIndicatorsDashboard = () => {
         cashFlows: validCashFlows.map(cf => parseFloat(cf))
       };
 
-      const token = localStorage.getItem('access_token');
-      const response = await axios.post('/api/financial-indicators/calculate/', requestData, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await API.post('/financial-indicators/calculate/', requestData);
 
       setResults(response.data);
     } catch (err) {
@@ -127,13 +121,7 @@ const FinancialIndicatorsDashboard = () => {
         text: aiText.trim()
       };
 
-      const token = localStorage.getItem('access_token');
-      const response = await axios.post('/api/financial-indicators/calculate-ai/', requestData, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await API.post('/financial-indicators/calculate-ai/', requestData);
 
       setAiResults(response.data);
     } catch (err) {
