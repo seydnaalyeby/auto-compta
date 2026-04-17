@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(py --version)",
+      "Read(//c/Users/seydn/AppData/Local/Programs/**)",
+      "Bash(ls /c/Python*/python.exe)",
+      "Read(//c/Users/seydn/**)",
+      "Bash(cmd.exe /c \"where python\")",
+      "Bash(cmd.exe /c \"where python && python --version\")",
+      "Read(//c/ProgramData/chocolatey/**)",
+      "Read(//c//**)",
+      "Bash(cmd.exe /c \"py -3 --version 2>&1\")",
+      "Bash(cmd.exe /c \"py --version\")",
+      "Bash(cmd.exe /c \"python --version\")",
+      "Bash(cmd.exe /c \"py --version > C:/temp/pyver.txt 2>&1\")",
+      "Read(//c/temp/**)",
+      "Bash(\"/c/Program Files/Python312/python.exe\" manage.py runserver)",
+      "Bash(python manage.py runserver 8000)",
+      "Bash(curl -s http://127.0.0.1:8000/api/)",
+      "Bash(python manage.py check)",
+      "Bash(npm start *)",
+      "Bash(curl -s http://127.0.0.1:8000/api/auth/profil/)",
+      "Bash(curl -s http://localhost:3000/)",
+      "Bash(npx react-scripts *)",
+      "Bash(node_modules/.bin/react-scripts build *)"
+    ]
+  }
+}

@@ -1,5 +1,19 @@
 import React, { useState } from 'react';
 import { corrigerImage, corrigerTexte } from '../../services/api';
+import { useLanguage } from '../../context/LanguageContext';
+import { IconCamera, IconFile, IconSparkles, IconUpload, IconCheck, IconAlert, IconInfo } from '../Icons';
+
+const EXAMPLE_TEXT = `BILAN AU 31/12/2024
+ACTIF:
+  Caisse: 5000 MRU
+  Banque: 3000 MRU
+  Stock: 8000 MRU
+TOTAL ACTIF: 14000 MRU
+
+PASSIF:
+  Capital: 10000 MRU
+  Fournisseurs: 2000 MRU
+TOTAL PASSIF: 12000 MRU`;
 
 export default function Correction() {
   const [mode, setMode] = useState('image');
@@ -9,6 +23,7 @@ export default function Correction() {
   const [resultat, setResultat] = useState(null);
   const [chargement, setChargement] = useState(false);
   const [erreur, setErreur] = useState('');
+  const { t } = useLanguage();
 
   const choisirImage = e => {
     const f = e.target.files[0];
@@ -31,200 +46,239 @@ export default function Correction() {
       } else if (mode === 'texte' && texte) {
         res = await corrigerTexte({ texte });
       } else {
-        setErreur('Veuillez fournir une image ou un texte');
+        setErreur(mode === 'image' ? 'Veuillez sélectionner une image.' : 'Veuillez coller un document.');
         setChargement(false);
         return;
       }
       setResultat(res.data);
     } catch (err) {
-      setErreur(err.response?.data?.error || 'Erreur lors de l\'analyse');
+      setErreur(err.response?.data?.error || "Erreur lors de l'analyse IA.");
     } finally {
       setChargement(false);
     }
   };
 
-  const exempleTexte = `BILAN AU 31/12/2024
-ACTIF:
-  Caisse: 5000 MRU
-  Banque: 3000 MRU
-  Stock: 8000 MRU
-TOTAL ACTIF: 14000 MRU
+  const reset = () => { setImage(null); setImagePreview(null); setResultat(null); setErreur(''); };
 
-PASSIF:
-  Capital: 10000 MRU
-  Fournisseurs: 2000 MRU
-TOTAL PASSIF: 12000 MRU`;
+  const ERROR_TYPE_LABELS = {
+    desequilibre: t('bilan.unbalanced'),
+    mauvais_compte: t('correc.problem'),
+    montant_incorrect: 'Montant incorrect',
+    autre: 'Erreur',
+  };
+
+  const TABS = [
+    { id: 'image', label: t('correc.tab_image'), Icon: IconCamera },
+    { id: 'texte', label: t('correc.tab_text'),  Icon: IconFile },
+  ];
 
   return (
-    <div>
-      <div style={styles.header}>
+    <div className="fade-in">
+      <div style={s.header}>
         <div>
-          <h1 style={styles.titre}>Correction IA 🔍</h1>
-          <p style={styles.sousTitre}>Envoyez une photo ou copiez un document comptable — l'IA détecte les erreurs !</p>
+          <h1 style={s.title}>{t('correc.title')}</h1>
+          <p style={s.subtitle}>{t('correc.subtitle')}</p>
         </div>
       </div>
 
-      {/* Tabs mode */}
-      <div style={styles.tabs}>
-        {[
-          { id: 'image', label: '📷 Photo du document' },
-          { id: 'texte', label: '📝 Coller le texte' },
-        ].map(t => (
-          <button key={t.id} onClick={() => { setMode(t.id); setResultat(null); }}
-            style={{ ...styles.tab, ...(mode === t.id ? styles.tabActive : {}) }}>
-            {t.label}
+      <div style={s.tabs}>
+        {TABS.map(tab => (
+          <button key={tab.id}
+            onClick={() => { setMode(tab.id); setResultat(null); setErreur(''); }}
+            style={{ ...s.tab, ...(mode === tab.id ? s.tabActive : {}) }}>
+            <tab.Icon size={15} color={mode === tab.id ? '#2563EB' : '#64748B'} />
+            {tab.label}
           </button>
         ))}
       </div>
 
-      <div style={styles.grille}>
-        {/* Input */}
-        <div style={styles.card}>
-          <h2 style={styles.cardTitre}>
-            {mode === 'image' ? '📷 Charger une photo' : '📝 Coller votre document'}
-          </h2>
+      <div style={s.grid}>
+        {/* Left — Input */}
+        <div style={s.card}>
+          <div style={s.cardHeader}>
+            <div style={{ ...s.cardIconWrap, background: mode === 'image' ? '#EFF6FF' : '#F5F3FF' }}>
+              {mode === 'image' ? <IconCamera size={16} color="#2563EB" /> : <IconFile size={16} color="#7C3AED" />}
+            </div>
+            <div>
+              <h2 style={s.cardTitle}>
+                {mode === 'image'
+                  ? (t('nav.correction') + ' — ' + t('correc.tab_image'))
+                  : (t('nav.correction') + ' — ' + t('correc.tab_text'))}
+              </h2>
+              <p style={s.cardSub}>Bilan · Compte de résultat · Journal comptable</p>
+            </div>
+          </div>
 
           {mode === 'image' ? (
             <div>
-              <div style={styles.uploadZone} onClick={() => document.getElementById('fileInput').click()}>
+              <div className="upload-zone" style={{ ...s.uploadZone, ...(imagePreview ? s.uploadZoneHasFile : {}) }}
+                onClick={() => document.getElementById('fileInput').click()}>
                 {imagePreview ? (
-                  <img src={imagePreview} alt="Document" style={styles.preview} />
+                  <img src={imagePreview} alt="Document" style={s.preview} />
                 ) : (
-                  <div style={styles.uploadPlaceholder}>
-                    <div style={styles.uploadIcon}>📷</div>
-                    <p>Cliquez pour choisir une photo</p>
-                    <p style={styles.uploadSub}>Bilan, compte de résultat, journal...</p>
+                  <div style={s.uploadPlaceholder}>
+                    <div style={s.uploadIconWrap}>
+                      <IconUpload size={24} color="#94A3B8" />
+                    </div>
+                    <p style={s.uploadTitle}>{t('correc.upload_hint')}</p>
+                    <p style={s.uploadSub}>{t('correc.upload_sub')}</p>
                   </div>
                 )}
               </div>
-              <input id="fileInput" type="file" accept="image/*"
-                onChange={choisirImage} style={{ display: 'none' }} />
+              <input id="fileInput" type="file" accept="image/*" onChange={choisirImage} style={{ display: 'none' }} />
               {imagePreview && (
-                <button onClick={() => { setImage(null); setImagePreview(null); }} style={styles.btnEffacer}>
-                  🗑️ Changer l'image
-                </button>
+                <button onClick={reset} style={s.changeBtn}>{t('correc.change_image')}</button>
               )}
             </div>
           ) : (
             <div>
-              <button onClick={() => setTexte(exempleTexte)} style={styles.btnExemple}>
-                💡 Charger un exemple
+              <button onClick={() => setTexte(EXAMPLE_TEXT)} style={s.exampleBtn}>
+                <IconInfo size={13} color="#2563EB" />
+                {t('nav.bilan')} — exemple
               </button>
-              <textarea value={texte} onChange={e => setTexte(e.target.value)}
-                placeholder="Collez ici votre bilan, compte de résultat ou journal comptable..."
-                style={styles.textarea} rows={12} />
+              <textarea
+                value={texte}
+                onChange={e => setTexte(e.target.value)}
+                placeholder={t('correc.text_placeholder')}
+                className="input-field"
+                style={s.textarea}
+                rows={12}
+              />
             </div>
           )}
 
-          {erreur && <div style={styles.erreur}>{erreur}</div>}
+          {erreur && (
+            <div style={s.errBox}>
+              <IconAlert size={14} color="#DC2626" />
+              <span style={s.errText}>{erreur}</span>
+            </div>
+          )}
 
-          <button onClick={analyser} style={{ ...styles.btn, opacity: chargement ? 0.7 : 1 }}
-            disabled={chargement}>
-            {chargement ? '🤖 Analyse en cours...' : '🔍 Analyser et détecter les erreurs'}
+          <button onClick={analyser} style={{ ...s.analyzeBtn, opacity: chargement ? 0.75 : 1 }}
+            disabled={chargement} className="btn-primary">
+            {chargement
+              ? <><span className="spinner" /> {t('correc.loading')}</>
+              : <><IconSparkles size={15} color="#fff" /> {t('correc.btn_analyze')}</>}
           </button>
 
-          <div style={styles.infoBox}>
-            <strong>💡 Comment ça marche :</strong>
-            <ul style={{ margin: '8px 0 0', paddingLeft: '20px', fontSize: '13px', lineHeight: '1.8' }}>
-              <li>Prenez une photo de votre document comptable</li>
-              <li>L'IA lit le document et vérifie les règles du Plan Comptable Mauritanien</li>
-              <li>Toutes les erreurs sont listées avec des explications claires</li>
-              <li>Des corrections sont suggérées pour chaque erreur</li>
+          <div style={s.infoBox}>
+            <div style={s.infoHeader}>
+              <IconInfo size={14} color="#2563EB" />
+              <span style={s.infoTitle}>Comment ça marche</span>
+            </div>
+            <ul style={s.infoList}>
+              <li>Prenez une photo ou copiez votre document comptable</li>
+              <li>L'IA vérifie les règles du Plan Comptable Mauritanien</li>
+              <li>Toutes les erreurs sont listées avec des corrections suggérées</li>
             </ul>
           </div>
         </div>
 
-        {/* Résultats */}
-        <div style={styles.card}>
-          <h2 style={styles.cardTitre}>🤖 Résultat de l'analyse</h2>
+        {/* Right — Results */}
+        <div style={s.card}>
+          <div style={s.cardHeader}>
+            <div style={{ ...s.cardIconWrap, background: '#F5F3FF' }}>
+              <IconSparkles size={16} color="#7C3AED" />
+            </div>
+            <div>
+              <h2 style={s.cardTitle}>Résultat de l'analyse</h2>
+              <p style={s.cardSub}>Plan Comptable Mauritanien BCM 1988</p>
+            </div>
+          </div>
 
           {!resultat && !chargement && (
-            <div style={styles.vide}>
-              <div style={styles.videIcon}>🔍</div>
-              <p>L'IA analysera votre document et détectera :</p>
-              <ul style={styles.listeVide}>
-                <li>✅ Déséquilibre Actif ≠ Passif</li>
-                <li>✅ Mauvais numéros de comptes (PCM)</li>
-                <li>✅ Erreurs de calcul</li>
-                <li>✅ Incohérences dans les montants</li>
-              </ul>
+            <div style={s.emptyState}>
+              <div style={s.emptyOrb}><IconSparkles size={28} color="#7C3AED" /></div>
+              <p style={s.emptyTitle}>{t('saisie.waiting')}</p>
+              <p style={s.emptyText}>{t('correc.ai_analyzing')}</p>
+              <div style={s.featureGrid}>
+                {['Actif ≠ Passif', 'Mauvais comptes PCM', 'Erreurs de calcul', 'Incohérences'].map((f, i) => (
+                  <div key={i} style={s.featureChip}>
+                    <IconCheck size={11} color="#059669" /><span>{f}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
           {chargement && (
-            <div style={styles.chargement}>
-              <div style={{ fontSize: '50px', marginBottom: '16px' }}>🤖</div>
-              <p>L'IA analyse votre document selon le Plan Comptable Mauritanien...</p>
+            <div style={s.loadingState}>
+              <div style={s.loadingOrb}>
+                <div className="spinner" style={{ width: 28, height: 28, borderWidth: 3, borderColor: 'rgba(124,58,237,0.2)', borderTopColor: '#7C3AED' }} />
+              </div>
+              <p style={s.loadingTitle}>{t('correc.loading')}</p>
+              <p style={s.loadingText}>L'IA vérifie votre document selon le Plan Comptable Mauritanien</p>
             </div>
           )}
 
           {resultat && (
-            <div>
-              {/* Type de document */}
-              <div style={styles.docType}>
-                📄 Document détecté : <strong>{resultat.document_type || 'Inconnu'}</strong>
+            <div className="fade-in">
+              <div style={s.docTypeBadge}>
+                <IconFile size={13} color="#475569" />
+                <span>Document : <strong>{resultat.document_type || 'Inconnu'}</strong></span>
               </div>
 
-              {/* Équilibre */}
-              <div style={{
-                ...styles.equilibreBox,
-                background: resultat.est_equilibre ? '#ecfdf5' : '#fef2f2',
-                border: `1px solid ${resultat.est_equilibre ? '#6ee7b7' : '#fca5a5'}`
-              }}>
-                <span style={{ fontSize: '24px' }}>{resultat.est_equilibre ? '✅' : '⚠️'}</span>
+              <div style={{ ...s.balanceStatus, background: resultat.est_equilibre ? '#ECFDF5' : '#FEF2F2', border: `1px solid ${resultat.est_equilibre ? '#A7F3D0' : '#FECACA'}` }}>
+                <div style={s.balanceStatusIcon}>
+                  {resultat.est_equilibre ? <IconCheck size={18} color="#059669" /> : <IconAlert size={18} color="#DC2626" />}
+                </div>
                 <div>
-                  <div style={{ fontWeight: '700', fontSize: '15px' }}>
-                    {resultat.est_equilibre ? 'Document équilibré' : 'Document déséquilibré !'}
-                  </div>
+                  <p style={{ ...s.balanceStatusTitle, color: resultat.est_equilibre ? '#059669' : '#DC2626' }}>
+                    {resultat.est_equilibre ? t('bilan.balanced') : t('bilan.unbalanced') + ' !'}
+                  </p>
                   {resultat.total_actif !== undefined && (
-                    <div style={{ fontSize: '13px', marginTop: '4px' }}>
-                      Actif: {Number(resultat.total_actif||0).toLocaleString()} MRU |
-                      Passif: {Number(resultat.total_passif||0).toLocaleString()} MRU
-                    </div>
+                    <p style={s.balanceStatusSub}>
+                      {t('bilan.actif_title')} : {Number(resultat.total_actif || 0).toLocaleString()} MRU · {t('bilan.passif_title')} : {Number(resultat.total_passif || 0).toLocaleString()} MRU
+                    </p>
                   )}
                 </div>
               </div>
 
-              {/* Erreurs */}
               {resultat.erreurs?.length > 0 ? (
-                <div style={styles.erreursSection}>
-                  <h3 style={styles.erreursTitre}>
-                    ⚠️ {resultat.erreurs.length} erreur(s) détectée(s)
-                  </h3>
+                <div style={s.errorsSection}>
+                  <p style={s.errorsTitle}>
+                    <span style={s.errorsCount}>{resultat.erreurs.length}</span>
+                    {resultat.erreurs.length} {t('correc.errors_found')}
+                  </p>
                   {resultat.erreurs.map((err, i) => (
-                    <div key={i} style={styles.erreurCard}>
-                      <div style={styles.erreurHeader}>
-                        <span style={styles.erreurNum}>#{i+1}</span>
-                        <span style={styles.erreurType}>{err.type_erreur}</span>
+                    <div key={i} style={s.errorCard}>
+                      <div style={s.errorCardTop}>
+                        <div style={s.errorNum}>#{i + 1}</div>
+                        <span style={s.errorTypeBadge}>{ERROR_TYPE_LABELS[err.type_erreur] || err.type_erreur}</span>
                       </div>
-                      <div style={styles.erreurLigne}>📍 <strong>Ligne :</strong> {err.ligne}</div>
-                      <div style={styles.erreurLigne}>❌ <strong>Problème :</strong> {err.description}</div>
-                      <div style={{ ...styles.erreurLigne, color: '#059669' }}>
-                        ✅ <strong>Correction :</strong> {err.correction_suggeree}
+                      <div style={s.errorRow}>
+                        <span style={s.errorRowKey}>Ligne :</span>
+                        <span style={s.errorRowVal}>{err.ligne}</span>
+                      </div>
+                      <div style={s.errorRow}>
+                        <span style={s.errorRowKey}>{t('correc.problem')} :</span>
+                        <span style={{ ...s.errorRowVal, color: '#DC2626' }}>{err.description}</span>
+                      </div>
+                      <div style={{ ...s.errorRow, borderBottom: 'none' }}>
+                        <span style={s.errorRowKey}>{t('correc.correction')} :</span>
+                        <span style={{ ...s.errorRowVal, color: '#059669', fontWeight: 600 }}>{err.correction_suggeree}</span>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div style={styles.pasErreur}>
-                  ✅ Aucune erreur détectée ! Document conforme au PCM Mauritanien
+                <div style={s.noErrors}>
+                  <IconCheck size={16} color="#059669" />
+                  {t('correc.no_errors')} — {t('correc.no_errors_sub')}
                 </div>
               )}
 
-              {/* Avertissements */}
               {resultat.avertissements?.length > 0 && (
-                <div style={styles.avertissements}>
-                  <h3 style={styles.avertissementsTitre}>⚠️ Avertissements</h3>
-                  {resultat.avertissements.map((a, i) => (
-                    <div key={i} style={styles.avertissement}>• {a}</div>
-                  ))}
+                <div style={s.warningsBox}>
+                  <p style={s.warningsTitle}>{t('correc.warnings')}</p>
+                  {resultat.avertissements.map((a, i) => <p key={i} style={s.warningItem}>· {a}</p>)}
                 </div>
               )}
 
-              {/* Résumé */}
               {resultat.resume && (
-                <div style={styles.resume}>
-                  <strong>📋 Résumé :</strong> {resultat.resume}
+                <div style={s.resumeBox}>
+                  <p style={s.resumeTitle}>{t('correc.summary')}</p>
+                  <p style={s.resumeText}>{resultat.resume}</p>
                 </div>
               )}
             </div>
@@ -235,47 +289,66 @@ TOTAL PASSIF: 12000 MRU`;
   );
 }
 
-const styles = {
-  header: { marginBottom: '20px' },
-  titre: { margin: 0, fontSize: '26px', fontWeight: '800', color: '#111827' },
-  sousTitre: { margin: '4px 0 0', color: '#6b7280', fontSize: '14px' },
-  tabs: { display: 'flex', gap: '8px', marginBottom: '20px' },
-  tab: { padding: '10px 20px', border: '1px solid #e5e7eb', borderRadius: '8px', cursor: 'pointer', background: '#f9fafb', fontSize: '14px', fontWeight: '500', color: '#374151' },
-  tabActive: { background: '#1a56db', color: '#fff', border: '1px solid #1a56db' },
-  grille: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' },
-  card: { background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '24px' },
-  cardTitre: { margin: '0 0 16px', fontSize: '17px', fontWeight: '700', color: '#111827' },
-  uploadZone: {
-    border: '2px dashed #d1d5db', borderRadius: '10px', padding: '20px',
-    cursor: 'pointer', textAlign: 'center', marginBottom: '12px', minHeight: '200px',
-    display: 'flex', alignItems: 'center', justifyContent: 'center'
-  },
-  uploadPlaceholder: { color: '#6b7280' },
-  uploadIcon: { fontSize: '48px', marginBottom: '12px' },
-  uploadSub: { fontSize: '12px', color: '#9ca3af', margin: '4px 0 0' },
-  preview: { maxWidth: '100%', maxHeight: '300px', borderRadius: '8px' },
-  btnEffacer: { background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', marginBottom: '12px' },
-  btnExemple: { background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1a56db', padding: '7px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', marginBottom: '10px', fontWeight: '500' },
-  textarea: { width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '13px', fontFamily: 'Courier, monospace', resize: 'vertical', boxSizing: 'border-box', lineHeight: '1.6' },
-  erreur: { background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626', padding: '10px', borderRadius: '8px', fontSize: '13px', marginBottom: '12px' },
-  btn: { width: '100%', padding: '12px', background: 'linear-gradient(135deg, #1a56db, #1e429f)', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginBottom: '14px' },
-  infoBox: { background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '14px', fontSize: '13px', color: '#0369a1' },
-  vide: { textAlign: 'center', padding: '30px', color: '#6b7280' },
-  videIcon: { fontSize: '48px', marginBottom: '12px' },
-  listeVide: { textAlign: 'left', display: 'inline-block', lineHeight: '2', fontSize: '14px' },
-  chargement: { textAlign: 'center', padding: '40px', color: '#6b7280' },
-  docType: { background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '10px 14px', fontSize: '14px', marginBottom: '14px', color: '#374151' },
-  equilibreBox: { borderRadius: '8px', padding: '14px', marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'flex-start' },
-  erreursSection: { marginBottom: '16px' },
-  erreursTitre: { margin: '0 0 12px', fontSize: '15px', fontWeight: '700', color: '#dc2626' },
-  erreurCard: { background: '#fef9f9', border: '1px solid #fecaca', borderRadius: '8px', padding: '14px', marginBottom: '10px' },
-  erreurHeader: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' },
-  erreurNum: { background: '#dc2626', color: '#fff', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700', flexShrink: 0 },
-  erreurType: { background: '#fef2f2', color: '#dc2626', padding: '2px 8px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' },
-  erreurLigne: { fontSize: '13px', color: '#374151', marginBottom: '6px', lineHeight: '1.5' },
-  pasErreur: { background: '#ecfdf5', border: '1px solid #6ee7b7', color: '#059669', padding: '14px', borderRadius: '8px', fontWeight: '600', textAlign: 'center', marginBottom: '14px' },
-  avertissements: { background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '8px', padding: '14px', marginBottom: '14px' },
-  avertissementsTitre: { margin: '0 0 8px', fontSize: '14px', fontWeight: '700', color: '#92400e' },
-  avertissement: { fontSize: '13px', color: '#78350f', marginBottom: '4px' },
-  resume: { background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '14px', fontSize: '13px', color: '#374151', lineHeight: '1.6' },
+const s = {
+  header: { marginBottom: 20 },
+  title: { fontSize: 26, fontWeight: 800, color: 'var(--text-1)', letterSpacing: '-0.025em', margin: 0 },
+  subtitle: { marginTop: 4, fontSize: 13, color: 'var(--text-3)' },
+  tabs: { display: 'flex', gap: 6, marginBottom: 20 },
+  tab: { display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px', border: '1.5px solid var(--border)', borderRadius: 9, background: '#fff', fontSize: 13.5, fontWeight: 500, color: 'var(--text-2)', cursor: 'pointer', transition: 'all 0.15s' },
+  tabActive: { borderColor: '#BFDBFE', background: '#EFF6FF', color: '#2563EB', fontWeight: 700 },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 20 },
+  card: { background: 'var(--card)', borderRadius: 'var(--radius-lg)', padding: '22px', boxShadow: 'var(--shadow)', border: '1px solid var(--border)' },
+  cardHeader: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)' },
+  cardIconWrap: { width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  cardTitle: { fontSize: 15, fontWeight: 700, color: 'var(--text-1)', margin: 0 },
+  cardSub: { fontSize: 12, color: 'var(--text-3)', marginTop: 2 },
+  uploadZone: { minHeight: 200, marginBottom: 12, padding: 20 },
+  uploadZoneHasFile: { padding: 8, minHeight: 'auto' },
+  uploadPlaceholder: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textAlign: 'center' },
+  uploadIconWrap: { width: 52, height: 52, borderRadius: 14, background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  uploadTitle: { fontSize: 14, fontWeight: 600, color: 'var(--text-1)' },
+  uploadSub: { fontSize: 12, color: 'var(--text-3)' },
+  preview: { maxWidth: '100%', maxHeight: 280, borderRadius: 10, display: 'block' },
+  changeBtn: { display: 'block', background: 'none', border: '1px solid #FECACA', color: '#DC2626', padding: '6px 14px', borderRadius: 7, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', marginBottom: 14, transition: 'background 0.15s' },
+  exampleBtn: { display: 'inline-flex', alignItems: 'center', gap: 6, background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#2563EB', padding: '7px 14px', borderRadius: 7, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', marginBottom: 10 },
+  textarea: { height: 220, resize: 'vertical', fontFamily: "'Courier New', monospace", fontSize: 12.5, lineHeight: 1.7 },
+  errBox: { display: 'flex', alignItems: 'center', gap: 8, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 12px', marginBottom: 14 },
+  errText: { color: '#DC2626', fontSize: 13, fontWeight: 500 },
+  analyzeBtn: { width: '100%', padding: '12px', marginBottom: 16, borderRadius: 10, fontSize: 14.5, fontWeight: 700 },
+  infoBox: { background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: 9, padding: '12px 14px' },
+  infoHeader: { display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 },
+  infoTitle: { fontSize: 12.5, fontWeight: 700, color: '#0369A1' },
+  infoList: { paddingLeft: 16, listStyle: 'disc', fontSize: 12.5, color: '#0369A1', lineHeight: 1.8 },
+  emptyState: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '28px 16px', textAlign: 'center' },
+  emptyOrb: { width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg,#F5F3FF,#EDE9FE)', border: '2px solid #DDD6FE', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  emptyTitle: { fontSize: 15, fontWeight: 700, color: 'var(--text-1)', marginBottom: 4 },
+  emptyText: { fontSize: 13, color: 'var(--text-3)', marginBottom: 14 },
+  featureGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7, width: '100%' },
+  featureChip: { display: 'flex', alignItems: 'center', gap: 6, background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 7, padding: '7px 10px', fontSize: 11.5, color: '#059669', fontWeight: 500 },
+  loadingState: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 16px', textAlign: 'center' },
+  loadingOrb: { width: 68, height: 68, borderRadius: '50%', background: 'linear-gradient(135deg,#F5F3FF,#EDE9FE)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  loadingTitle: { fontSize: 15, fontWeight: 700, color: 'var(--text-1)', marginBottom: 4 },
+  loadingText: { fontSize: 12.5, color: 'var(--text-3)', lineHeight: 1.5, maxWidth: 260 },
+  docTypeBadge: { display: 'flex', alignItems: 'center', gap: 7, background: '#F8FAFC', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: 'var(--text-2)', marginBottom: 12 },
+  balanceStatus: { borderRadius: 10, padding: '12px 14px', marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 10 },
+  balanceStatusIcon: { flexShrink: 0, marginTop: 1 },
+  balanceStatusTitle: { fontSize: 14, fontWeight: 700, marginBottom: 2 },
+  balanceStatusSub: { fontSize: 12, color: 'var(--text-2)' },
+  errorsSection: { marginBottom: 14 },
+  errorsTitle: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 700, color: '#DC2626', marginBottom: 10 },
+  errorsCount: { background: '#DC2626', color: '#fff', width: 22, height: 22, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11.5, fontWeight: 800, flexShrink: 0 },
+  errorCard: { background: '#FFF9F9', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 14px', marginBottom: 8 },
+  errorCardTop: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 },
+  errorNum: { background: '#DC2626', color: '#fff', width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, flexShrink: 0 },
+  errorTypeBadge: { background: '#FEE2E2', color: '#DC2626', padding: '2px 9px', borderRadius: 99, fontSize: 11.5, fontWeight: 700 },
+  errorRow: { display: 'flex', gap: 8, padding: '5px 0', borderBottom: '1px solid #FEE2E2', fontSize: 12.5 },
+  errorRowKey: { color: 'var(--text-3)', fontWeight: 600, flexShrink: 0, minWidth: 70 },
+  errorRowVal: { color: 'var(--text-1)', lineHeight: 1.4 },
+  noErrors: { display: 'flex', alignItems: 'center', gap: 8, background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 9, padding: '12px 14px', fontSize: 13.5, color: '#059669', fontWeight: 600, marginBottom: 12 },
+  warningsBox: { background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 9, padding: '12px 14px', marginBottom: 12 },
+  warningsTitle: { fontSize: 12.5, fontWeight: 700, color: '#92400E', marginBottom: 6 },
+  warningItem: { fontSize: 12.5, color: '#78350F', lineHeight: 1.6 },
+  resumeBox: { background: '#F8FAFC', border: '1px solid var(--border)', borderRadius: 9, padding: '12px 14px' },
+  resumeTitle: { fontSize: 12, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 },
+  resumeText: { fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 },
 };
