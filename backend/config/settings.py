@@ -1,4 +1,5 @@
 import os
+import dj_database_url
 from datetime import timedelta
 from pathlib import Path
 
@@ -39,6 +40,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -69,6 +71,8 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 DB_ENGINE = os.getenv('DB_ENGINE', 'postgresql').lower()
+DATABASE_URL = os.getenv('DATABASE_URL', '')
+
 if DB_ENGINE == 'sqlite':
     DESKTOP_DATA_DIR.mkdir(parents=True, exist_ok=True)
     DATABASES = {
@@ -77,7 +81,13 @@ if DB_ENGINE == 'sqlite':
             'NAME': str(DESKTOP_DATA_DIR / 'auto_compta.sqlite3'),
         }
     }
+elif DATABASE_URL:
+    # Production: use full connection string (Neon, etc.)
+    DATABASES = {
+        'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+    }
 else:
+    # Local development: use individual env vars
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -113,7 +123,9 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [WEB_BUILD_DIR / 'static'] if (WEB_BUILD_DIR / 'static').exists() else []
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
