@@ -1,8 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { IconCheck } from '../Icons';
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const h = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+  return isMobile;
+}
 
 export default function Auth() {
   const [mode, setMode] = useState('connexion');
@@ -15,6 +25,7 @@ export default function Auth() {
   const { seConnecter, sInscrire } = useAuth();
   const { t, lang, setLang, isRTL } = useLanguage();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const change = e => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -38,21 +49,21 @@ export default function Auth() {
   const font = isRTL ? "'Tajawal', Arial, sans-serif" : "'Plus Jakarta Sans', system-ui, sans-serif";
 
   return (
-    <div style={{ ...s.page, direction: isRTL ? 'rtl' : 'ltr', fontFamily: font }}>
+    <div style={{
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      minHeight: '100vh',
+      fontFamily: font,
+      direction: isRTL ? 'rtl' : 'ltr',
+    }}>
 
       {/* ══════ LEFT PANEL ══════ */}
-      <div style={s.left}>
-        {/* Decorative rings */}
-        <div style={{ ...s.ring, width: 480, height: 480, top: -160, right: -160, opacity: 0.04 }} />
-        <div style={{ ...s.ring, width: 300, height: 300, bottom: -60, left: -100, opacity: 0.04 }} />
-        <div style={{ ...s.dot, top: '28%', right: '14%' }} />
-        <div style={{ ...s.dot, bottom: '32%', left: '16%', width: 7, height: 7 }} />
-
-        <div style={s.leftInner}>
-          {/* Brand */}
+      {isMobile ? (
+        /* Mobile: compact top banner */
+        <div style={s.mobileBanner}>
           <div style={s.brand}>
             <div style={s.brandIcon}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <path d="M3 3h7v7H3z" fill="#93C5FD"/>
                 <path d="M14 3h7v7h-7z" fill="#A5B4FC" opacity=".9"/>
                 <path d="M3 14h7v7H3z" fill="#6EE7B7" opacity=".9"/>
@@ -61,51 +72,76 @@ export default function Auth() {
             </div>
             <span style={s.brandName}>Auto-Compta</span>
           </div>
-
-          <h1 style={s.hero}>
-            {isRTL
-              ? 'محاسبة ذكية لمؤسستك'
-              : 'La comptabilité\nintelligente'}
-          </h1>
-          <p style={s.tagline}>
-            {isRTL
-              ? 'حلول محاسبية متكاملة للمؤسسات الصغيرة والمتوسطة الموريتانية، مدعومة بالذكاء الاصطناعي.'
-              : "Conforme au Plan Comptable Mauritanien BCM 1988. Propulsé par l'IA Gemini."}
+          <p style={s.mobileSub}>
+            {isRTL ? 'محاسبة ذكية · BCM 1988' : 'Comptabilité intelligente · BCM 1988'}
           </p>
+        </div>
+      ) : (
+        /* Desktop: full left panel */
+        <div style={s.left}>
+          <div style={{ ...s.ring, width: 480, height: 480, top: -160, right: -160, opacity: 0.04 }} />
+          <div style={{ ...s.ring, width: 300, height: 300, bottom: -60, left: -100, opacity: 0.04 }} />
+          <div style={{ ...s.dot, top: '28%', right: '14%' }} />
+          <div style={{ ...s.dot, bottom: '32%', left: '16%', width: 7, height: 7 }} />
 
-          {/* Features */}
-          <div style={s.featureList}>
-            {FEATURES.map((f, i) => (
-              <div key={i} style={s.feature}>
-                <div style={s.checkWrap}><IconCheck size={10} color="#60A5FA" /></div>
-                <span style={s.featureText}>{f}</span>
+          <div style={s.leftInner}>
+            <div style={s.brand}>
+              <div style={s.brandIcon}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <path d="M3 3h7v7H3z" fill="#93C5FD"/>
+                  <path d="M14 3h7v7h-7z" fill="#A5B4FC" opacity=".9"/>
+                  <path d="M3 14h7v7H3z" fill="#6EE7B7" opacity=".9"/>
+                  <path d="M14 14h7v7h-7z" fill="#FDE68A" opacity=".9"/>
+                </svg>
               </div>
-            ))}
-          </div>
+              <span style={s.brandName}>Auto-Compta</span>
+            </div>
 
-          {/* Stats bar */}
-          <div style={s.statsBar}>
-            {[
-              { v: 'BCM', l: isRTL ? 'المعيار' : 'Norme' },
-              { v: 'PCM', l: isRTL ? 'المخطط' : 'Plan' },
-              { v: '1988', l: isRTL ? 'إصدار' : 'Version' },
-            ].map((stat, i, arr) => (
-              <React.Fragment key={i}>
-                <div style={s.statItem}>
-                  <span style={s.statVal}>{stat.v}</span>
-                  <span style={s.statLbl}>{stat.l}</span>
+            <h1 style={s.hero}>
+              {isRTL ? 'محاسبة ذكية لمؤسستك' : 'La comptabilité\nintelligente'}
+            </h1>
+            <p style={s.tagline}>
+              {isRTL
+                ? 'حلول محاسبية متكاملة للمؤسسات الصغيرة والمتوسطة الموريتانية، مدعومة بالذكاء الاصطناعي.'
+                : "Conforme au Plan Comptable Mauritanien BCM 1988. Propulsé par l'IA Gemini."}
+            </p>
+
+            <div style={s.featureList}>
+              {FEATURES.map((f, i) => (
+                <div key={i} style={s.feature}>
+                  <div style={s.checkWrap}><IconCheck size={10} color="#60A5FA" /></div>
+                  <span style={s.featureText}>{f}</span>
                 </div>
-                {i < arr.length - 1 && <div style={s.statSep} />}
-              </React.Fragment>
-            ))}
+              ))}
+            </div>
+
+            <div style={s.statsBar}>
+              {[
+                { v: 'BCM', l: isRTL ? 'المعيار' : 'Norme' },
+                { v: 'PCM', l: isRTL ? 'المخطط' : 'Plan' },
+                { v: '1988', l: isRTL ? 'إصدار' : 'Version' },
+              ].map((stat, i, arr) => (
+                <React.Fragment key={i}>
+                  <div style={s.statItem}>
+                    <span style={s.statVal}>{stat.v}</span>
+                    <span style={s.statLbl}>{stat.l}</span>
+                  </div>
+                  {i < arr.length - 1 && <div style={s.statSep} />}
+                </React.Fragment>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ══════ RIGHT PANEL ══════ */}
-      <div style={s.right}>
+      <div style={{
+        ...s.right,
+        padding: isMobile ? '20px 16px 40px' : '40px 24px',
+        justifyContent: isMobile ? 'flex-start' : 'center',
+      }}>
         {/* Language toggle */}
-        <div style={s.langRow}>
+        <div style={{ ...s.langRow, position: isMobile ? 'static' : 'absolute', marginBottom: isMobile ? 16 : 0, alignSelf: 'flex-end' }}>
           {['fr', 'ar'].map(l => (
             <button key={l} onClick={() => setLang(l)}
               style={{ ...s.langBtn, ...(lang === l ? s.langBtnOn : {}) }}>
@@ -114,7 +150,11 @@ export default function Auth() {
           ))}
         </div>
 
-        <div style={s.formWrap}>
+        <div style={{
+          ...s.formWrap,
+          padding: isMobile ? '24px 20px' : '40px 40px',
+          borderRadius: isMobile ? 18 : 24,
+        }}>
           {/* Tabs */}
           <div style={s.tabs}>
             {['connexion', 'inscription'].map(m => (
@@ -125,7 +165,7 @@ export default function Auth() {
             ))}
           </div>
 
-          <h2 style={s.formTitle}>
+          <h2 style={{ ...s.formTitle, fontSize: isMobile ? 20 : 24 }}>
             {mode === 'connexion'
               ? (isRTL ? 'مرحباً بعودتك !' : 'Bon retour !')
               : (isRTL ? 'إنشاء حسابك' : 'Créer votre compte')}
@@ -155,7 +195,7 @@ export default function Auth() {
                 value={form.email} onChange={change} placeholder="vous@exemple.com" required />
               <Field label={t('auth.company')} name="nom_entreprise"
                 value={form.nom_entreprise} onChange={change} placeholder="Ma Société SARL" required />
-              <div style={s.twoCol}>
+              <div style={{ ...s.twoCol, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
                 <Field label={t('auth.sector')} name="secteur" value={form.secteur}
                   onChange={change} placeholder={isRTL ? 'تجارة…' : 'Commerce…'} />
                 <Field label={isRTL ? 'الهاتف' : 'Téléphone'} name="telephone"
@@ -210,9 +250,13 @@ function Field({ label, name, type = 'text', value, onChange, placeholder, requi
 }
 
 const s = {
-  page: { display: 'flex', minHeight: '100vh', fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" },
+  mobileBanner: {
+    background: 'linear-gradient(135deg, #0A1628 0%, #1D4ED8 100%)',
+    padding: '20px 20px 18px',
+    display: 'flex', flexDirection: 'column', gap: 4,
+  },
+  mobileSub: { color: 'rgba(255,255,255,0.5)', fontSize: 12, margin: 0 },
 
-  /* Left */
   left: {
     flex: '0 0 44%',
     background: 'linear-gradient(145deg, #0A1628 0%, #0F2040 45%, #162E5C 75%, #1D4ED8 100%)',
@@ -223,14 +267,14 @@ const s = {
   ring: { position: 'absolute', borderRadius: '50%', border: '1px solid #fff', pointerEvents: 'none' },
   dot:  { position: 'absolute', width: 10, height: 10, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', pointerEvents: 'none' },
 
-  brand: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 },
+  brand: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 },
   brandIcon: {
-    width: 44, height: 44, borderRadius: 13,
+    width: 40, height: 40, borderRadius: 12,
     background: 'rgba(255,255,255,0.1)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     boxShadow: '0 4px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1)',
   },
-  brandName: { color: '#fff', fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em' },
+  brandName: { color: '#fff', fontSize: 17, fontWeight: 800, letterSpacing: '-0.02em' },
 
   hero: {
     fontSize: 38, fontWeight: 900, color: '#fff',
@@ -247,7 +291,7 @@ const s = {
     border: '1.5px solid rgba(96,165,250,0.35)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  featureText: { color: 'rgba(255,255,255,0.65)', fontSize: 13.5, fontWeight: 400, lineHeight: 1.4 },
+  featureText: { color: 'rgba(255,255,255,0.65)', fontSize: 13.5, lineHeight: 1.4 },
 
   statsBar: {
     display: 'flex', alignItems: 'center',
@@ -260,15 +304,14 @@ const s = {
   statLbl:   { display: 'block', color: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' },
   statSep:   { width: 1, height: 38, background: 'rgba(255,255,255,0.08)', flexShrink: 0 },
 
-  /* Right */
   right: {
     flex: 1, display: 'flex', flexDirection: 'column',
-    alignItems: 'center', justifyContent: 'center',
-    background: '#F5F7FD', padding: '40px 24px', position: 'relative',
+    alignItems: 'center',
+    background: '#F5F7FD', position: 'relative',
   },
   langRow: {
-    position: 'absolute', top: 22, right: 22,
     display: 'flex', background: '#E8EDF7', borderRadius: 10, padding: 3, gap: 2,
+    top: 22, right: 22,
   },
   langBtn: {
     padding: '5px 14px', borderRadius: 8, border: 'none',
@@ -278,31 +321,27 @@ const s = {
   langBtnOn: { background: '#fff', color: '#2563EB', boxShadow: '0 1px 6px rgba(0,0,0,0.12)' },
 
   formWrap: {
-    background: '#fff', borderRadius: 24,
-    padding: '40px 40px', width: '100%', maxWidth: 460,
+    background: '#fff',
+    width: '100%', maxWidth: 460,
     boxShadow: '0 4px 6px rgba(13,21,38,0.04), 0 20px 60px rgba(13,21,38,0.10)',
     border: '1px solid rgba(13,21,38,0.06)',
   },
 
   tabs: {
-    display: 'flex', background: '#F0F4FB', borderRadius: 12, padding: 4, gap: 3, marginBottom: 28,
+    display: 'flex', background: '#F0F4FB', borderRadius: 12, padding: 4, gap: 3, marginBottom: 24,
   },
   tab: {
     flex: 1, padding: '9px', border: 'none', borderRadius: 9,
     background: 'transparent', cursor: 'pointer',
-    fontSize: 13.5, fontWeight: 600, color: '#6B7A99',
-    transition: 'all 0.15s',
+    fontSize: 13.5, fontWeight: 600, color: '#6B7A99', transition: 'all 0.15s',
   },
   tabOn: {
     background: '#fff', color: '#0D1526', fontWeight: 800,
     boxShadow: '0 1px 6px rgba(0,0,0,0.1)',
   },
 
-  formTitle: {
-    fontSize: 24, fontWeight: 900, color: '#0D1526',
-    letterSpacing: '-0.025em', marginBottom: 6,
-  },
-  formSub: { fontSize: 13.5, color: '#6B7A99', marginBottom: 24, lineHeight: 1.5 },
+  formTitle: { fontWeight: 900, color: '#0D1526', letterSpacing: '-0.025em', marginBottom: 6 },
+  formSub:   { fontSize: 13.5, color: '#6B7A99', marginBottom: 20, lineHeight: 1.5 },
 
   errBox: {
     display: 'flex', alignItems: 'center', gap: 9,
@@ -311,8 +350,8 @@ const s = {
   },
   errText: { color: '#DC2626', fontSize: 13, fontWeight: 600 },
 
-  form: { display: 'flex', flexDirection: 'column', gap: 16 },
-  twoCol: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
+  form:   { display: 'flex', flexDirection: 'column', gap: 14 },
+  twoCol: { display: 'grid', gap: 12 },
 
   submitBtn: {
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
@@ -327,7 +366,7 @@ const s = {
 
   footer: {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    gap: 7, marginTop: 24,
+    gap: 7, marginTop: 20, flexWrap: 'wrap',
   },
   footerText: { fontSize: 13, color: '#6B7A99' },
   switchBtn: {
