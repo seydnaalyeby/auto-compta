@@ -1,299 +1,273 @@
 """
 Financial Indicators Calculation Service
-Contains all financial calculation functions and AI integration
+Contains all financial calculation functions and AI integration.
 """
 
 from typing import List, Dict, Any
-import math
 import json
 import re
+import unicodedata
+
 try:
     import google.generativeai as genai
+
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
 
+from django.conf import settings
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    if value in (None, "", []):
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    text = str(value).strip().replace("\xa0", "").replace(" ", "")
+    if not text:
+        return default
+
+    if "," in text and "." in text:
+        if text.rfind(",") > text.rfind("."):
+            text = text.replace(".", "").replace(",", ".")
+        else:
+            text = text.replace(",", "")
+    elif "," in text:
+        if text.count(",") == 1 and len(text.split(",")[-1]) <= 2:
+            text = text.replace(",", ".")
+        else:
+            text = text.replace(",", "")
+
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return default
+
+
+def _numbers_from_matches(matches):
+    values = []
+    for match in matches:
+        value = _safe_float(match, None)
+        if value is not None:
+            values.append(value)
+    return values
+
+
+def _normalize_text(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text or "")
+    return "".join(char for char in normalized if not unicodedata.combining(char)).lower()
+
+
+def _extract_section_amount(text: str, keywords: List[str]) -> float | None:
+    lowered = _normalize_text(text)
+    for keyword in keywords:
+        start = lowered.find(_normalize_text(keyword))
+        if start == -1:
+            continue
+        snippet = lowered[start:start + 160]
+        matches = re.findall(r"(\d[\d\s.,]*)", snippet)
+        values = _numbers_from_matches(matches)
+        if values:
+            return values[0]
+    return None
+
+
+def _get_gemini_model():
+    if not GEMINI_AVAILABLE:
+        return None
+
+    api_key = getattr(settings, "GEMINI_API_KEY", "")
+    if not api_key:
+        return None
+
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel(getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash"))
+
 
 def calculate_bfr(receivables: float, payables: float) -> float:
-    """
-    Calculate BFR (Besoin en Fonds de Roulement)
-    BFR = receivables - payables
-    """
     if receivables is None or payables is None:
         raise ValueError("Receivables and payables cannot be None")
-    
     return receivables - payables
 
 
 def calculate_van(investment_initial: float, cash_flows: List[float], discount_rate: float) -> float:
-    """
-    Calculate VAN (Valeur Actuelle Nette)
-    VAN = -investmentInitial + Σ(cashFlow / (1 + rate)^t)
-    """
     if investment_initial is None or cash_flows is None or discount_rate is None:
         raise ValueError("All parameters are required")
-    
     if not cash_flows:
         raise ValueError("Cash flows list cannot be empty")
-    
     if discount_rate == -1:
         raise ValueError("Discount rate cannot be -1")
-    
+
     van = -investment_initial
     for t, cash_flow in enumerate(cash_flows, start=1):
         van += cash_flow / ((1 + discount_rate) ** t)
-    
     return van
 
 
 def calculate_ip(van: float, investment_initial: float) -> float:
-    """
-    Calculate IP (Indice de Profitabilité)
-    IP = (van + investmentInitial) / investmentInitial
-    """
     if van is None or investment_initial is None:
         raise ValueError("VAN and investment initial are required")
-    
     if investment_initial == 0:
         raise ValueError("Investment initial cannot be zero")
-    
     return (van + investment_initial) / investment_initial
 
 
 def calculate_drsi(investment_initial: float, cash_flows: List[float]) -> float:
-    """
-    Calculate DRSI (Délai de Récupération sur Investissement)
-    Iterate cumulative cashFlows until >= investmentInitial
-    Return year index (or fractional year if possible)
-    """
     if investment_initial is None or cash_flows is None:
         raise ValueError("Investment initial and cash flows are required")
-    
     if not cash_flows:
         raise ValueError("Cash flows list cannot be empty")
-    
     if investment_initial <= 0:
         raise ValueError("Investment initial must be positive")
-    
+
     cumulative = 0
     for year, cash_flow in enumerate(cash_flows, start=1):
         cumulative += cash_flow
         if cumulative >= investment_initial:
-            # Calculate fractional year if possible
             previous_cumulative = cumulative - cash_flow
             remaining_needed = investment_initial - previous_cumulative
             if cash_flow > 0:
                 fractional_year = remaining_needed / cash_flow
                 return year - 1 + fractional_year
-            else:
-                return year
-    
-    # If never reaches investment initial
-    return float('inf')
+            return year
+
+    return float("inf")
 
 
 def calculate_caf(net_result: float, amortization: float) -> float:
-    """
-    Calculate CAF (Capacité d'Autofinancement)
-    CAF = netResult + amortization
-    """
     if net_result is None or amortization is None:
         raise ValueError("Net result and amortization are required")
-    
     return net_result + amortization
 
 
 def calculate_all_indicators(data: Dict[str, Any]) -> Dict[str, float]:
-    """
-    Calculate all financial indicators from input data
-    """
     try:
-        # Extract data from input
-        investment_initial = float(data.get('investmentInitial', 0))
-        cash_flows = [float(cf) for cf in data.get('cashFlows', [])]
-        discount_rate = float(data.get('discountRate', 0))
-        net_result = float(data.get('netResult', 0))
-        amortization = float(data.get('amortization', 0))
-        receivables = float(data.get('receivables', 0))
-        payables = float(data.get('payables', 0))
-        
-        # Calculate all indicators
+        investment_initial = _safe_float(data.get("investmentInitial", 0))
+        cash_flows = [_safe_float(cf) for cf in data.get("cashFlows", []) if _safe_float(cf) != 0]
+        discount_rate = _safe_float(data.get("discountRate", 0))
+        net_result = _safe_float(data.get("netResult", 0))
+        amortization = _safe_float(data.get("amortization", 0))
+        receivables = _safe_float(data.get("receivables", 0))
+        payables = _safe_float(data.get("payables", 0))
+
         bfr = calculate_bfr(receivables, payables)
         van = calculate_van(investment_initial, cash_flows, discount_rate)
         ip = calculate_ip(van, investment_initial)
         drsi = calculate_drsi(investment_initial, cash_flows)
         caf = calculate_caf(net_result, amortization)
-        
+
         return {
-            'bfr': round(bfr, 2),
-            'van': round(van, 2),
-            'ip': round(ip, 2),
-            'drsi': round(drsi, 2) if drsi != float('inf') else float('inf'),
-            'caf': round(caf, 2)
+            "bfr": round(bfr, 2),
+            "van": round(van, 2),
+            "ip": round(ip, 2),
+            "drsi": round(drsi, 2) if drsi != float("inf") else None,
+            "caf": round(caf, 2),
         }
-    
     except Exception as e:
         raise ValueError(f"Error calculating indicators: {str(e)}")
 
 
 def extract_financial_data_with_ai(text: str) -> Dict[str, Any]:
-    """
-    Use AI to extract financial data from natural language text
-    """
-    if not GEMINI_AVAILABLE:
-        return _fallback_extract_financial_data(text)
-    
-    try:
-        # Configure Gemini API
-        genai.configure(api_key="AIzaSyBj2k8f9v3X7w4Y1z6A5b8c9d0e1f2g3h4i5")
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        
-        prompt = f"""
-        En tant qu'expert comptable, analyse ce texte et extrais les données financières suivantes:
-        
-        Texte: "{text}"
-        
-        Retourne UNIQUEMENT un JSON avec cette structure exacte:
-        {{
-            "investmentInitial": nombre,
-            "cashFlows": [nombre1, nombre2, ...],
-            "discountRate": nombre (en décimal, ex: 0.1 pour 10%),
-            "netResult": nombre,
-            "amortization": nombre,
-            "receivables": nombre,
-            "payables": nombre
-        }}
-        
-        Si une valeur n'est pas mentionnée, utilise 0.
-        Les montants doivent être en nombres (pas de texte).
-        """
-        
-        response = model.generate_content(prompt)
-        result_text = response.text.strip()
-        
-        # Extract JSON from response
-        json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
-        if json_match:
-            extracted_data = json.loads(json_match.group())
-            
-            # Validate and clean data
-            return {
-                'investmentInitial': float(extracted_data.get('investmentInitial', 0)),
-                'cashFlows': [float(cf) for cf in extracted_data.get('cashFlows', []) if cf > 0],
-                'discountRate': float(extracted_data.get('discountRate', 0.1)),
-                'netResult': float(extracted_data.get('netResult', 0)),
-                'amortization': float(extracted_data.get('amortization', 0)),
-                'receivables': float(extracted_data.get('receivables', 0)),
-                'payables': float(extracted_data.get('payables', 0))
-            }
-        else:
-            return _fallback_extract_financial_data(text)
-            
-    except Exception as e:
-        # Fallback to rule-based extraction if AI fails
-        return _fallback_extract_financial_data(text)
+    return _fallback_extract_financial_data(text)
 
 
 def _fallback_extract_financial_data(text: str) -> Dict[str, Any]:
-    """
-    Fallback rule-based extraction when AI is not available
-    """
-    text_lower = text.lower()
-    
-    # Extract numbers from text
-    numbers = re.findall(r'[\d,]+\.?\d*', text)
-    numbers = [float(num.replace(',', '')) for num in numbers]
-    
-    # Default values
+    text_lower = _normalize_text(text)
+
+    numbers = re.findall(r"[\d\s,]+\.?\d*", text)
+    numbers = [value for value in _numbers_from_matches(numbers) if value is not None]
+    mru_matches = re.findall(r"(\d[\d\s.,]*)\s*(?:mru|ouguiya)", text, flags=re.IGNORECASE)
+    mru_numbers = [value for value in _numbers_from_matches(mru_matches) if value > 0]
+
     extracted_data = {
-        'investmentInitial': 0,
-        'cashFlows': [],
-        'discountRate': 0.1,
-        'netResult': 0,
-        'amortization': 0,
-        'receivables': 0,
-        'payables': 0
+        "investmentInitial": 0,
+        "cashFlows": [],
+        "discountRate": 0.1,
+        "netResult": 0,
+        "amortization": 0,
+        "receivables": 0,
+        "payables": 0,
     }
-    
-    # Rule-based extraction based on keywords
-    if 'investissement' in text_lower or 'investi' in text_lower:
-        for i, num in enumerate(numbers):
-            if num > 1000:  # Assume investment is a significant amount
-                extracted_data['investmentInitial'] = num
-                break
-    
-    if 'flux' in text_lower or 'cash flow' in text_lower or 'revenu' in text_lower:
-        # Extract cash flows (look for multiple amounts)
-        cash_flows = [num for num in numbers if 1000 <= num <= 100000]
-        if len(cash_flows) > 1:
-            extracted_data['cashFlows'] = cash_flows[:5]  # Limit to 5 years
-        elif len(cash_flows) == 1:
-            extracted_data['cashFlows'] = [cash_flows[0]]
-    
-    if 'taux' in text_lower or '%' in text:
-        for num in numbers:
-            if num < 1:  # Discount rate is usually < 1
-                extracted_data['discountRate'] = num
-                break
-        # If no rate < 1 found, look for percentage
-        if extracted_data['discountRate'] == 0.1:
-            for num in numbers:
-                if num > 1 and num < 100:  # Percentage like 10
-                    extracted_data['discountRate'] = num / 100
-                    break
-    
-    if 'résultat' in text_lower or 'bénéfice' in text_lower or 'profit' in text_lower:
-        for num in numbers:
-            if 10000 <= num <= 1000000:  # Reasonable profit range
-                extracted_data['netResult'] = num
-                break
-    
-    if 'amortissement' in text_lower or 'dépréciation' in text_lower:
-        for num in numbers:
-            if 1000 <= num <= 100000:  # Reasonable amortization range
-                extracted_data['amortization'] = num
-                break
-    
-    if 'créance' in text_lower or 'compte client' in text_lower:
-        for num in numbers:
-            if 10000 <= num <= 500000:  # Reasonable receivables range
-                extracted_data['receivables'] = num
-                break
-    
-    if 'dette' in text_lower or 'fournisseur' in text_lower or 'payable' in text_lower:
-        for num in numbers:
-            if 10000 <= num <= 500000:  # Reasonable payables range
-                extracted_data['payables'] = num
-                break
-    
-    # If no cash flows found, create default ones based on investment
-    if not extracted_data['cashFlows'] and extracted_data['investmentInitial'] > 0:
-        investment = extracted_data['investmentInitial']
-        # Create 3 years of cash flows (30%, 40%, 50% of investment)
-        extracted_data['cashFlows'] = [
+
+    investment = _extract_section_amount(text, ["investir", "investissement", "investi"])
+    if investment is not None:
+        extracted_data["investmentInitial"] = investment
+    elif mru_numbers:
+        extracted_data["investmentInitial"] = mru_numbers[0]
+
+    cash_flow_matches = re.findall(
+        r"(\d[\d\s.,]*)\s*(?:mru|ouguiya)?[^.]*?(?:premiere annee|premiere année|deuxieme annee|deuxième année|troisieme annee|troisième année|quatrieme annee|quatrième année|cinquieme annee|cinquième année)",
+        text_lower,
+        flags=re.IGNORECASE,
+    )
+    cash_flows = [value for value in _numbers_from_matches(cash_flow_matches) if value > 0]
+
+    if not cash_flows and ("generer" in text_lower or "générer" in text_lower):
+        mru_matches = re.findall(r"(\d[\d\s.,]*)\s*(?:mru|ouguiya)", text, flags=re.IGNORECASE)
+        candidate_numbers = [value for value in _numbers_from_matches(mru_matches) if value > 0]
+        if candidate_numbers and extracted_data["investmentInitial"]:
+            cash_flows = [value for value in candidate_numbers if value != extracted_data["investmentInitial"]]
+        else:
+            cash_flows = candidate_numbers[1:4]
+
+    extracted_data["cashFlows"] = cash_flows
+    if len(extracted_data["cashFlows"]) < 2 and len(mru_numbers) >= 4:
+        extracted_data["cashFlows"] = mru_numbers[1:4]
+
+    rate_match = re.search(r"(\d[\d\s.,]*)\s*%", text)
+    if rate_match:
+        extracted_data["discountRate"] = _safe_float(rate_match.group(1), 10.0) / 100
+    elif "taux" in text_lower:
+        taux = _extract_section_amount(text, ["taux"])
+        if taux is not None:
+            extracted_data["discountRate"] = taux / 100 if taux > 1 else taux
+
+    net_result = _extract_section_amount(text, ["resultat net", "résultat net", "benefice", "bénéfice", "profit"])
+    if net_result is not None:
+        extracted_data["netResult"] = net_result
+
+    amortization = _extract_section_amount(text, ["amortissement", "depreciation", "dépréciation"])
+    if amortization is not None:
+        extracted_data["amortization"] = amortization
+
+    receivables = _extract_section_amount(text, ["creances", "créances", "compte client"])
+    if receivables is not None:
+        extracted_data["receivables"] = receivables
+
+    payables = _extract_section_amount(text, ["dettes", "dette", "fournisseur", "payable"])
+    if payables is not None:
+        extracted_data["payables"] = payables
+
+    if len(mru_numbers) >= 8:
+        trailing_values = mru_numbers[-4:]
+        if extracted_data["netResult"] == 0:
+            extracted_data["netResult"] = trailing_values[0]
+        if extracted_data["amortization"] == 0:
+            extracted_data["amortization"] = trailing_values[1]
+        if extracted_data["receivables"] == 0:
+            extracted_data["receivables"] = trailing_values[2]
+        if extracted_data["payables"] == 0:
+            extracted_data["payables"] = trailing_values[3]
+
+    if not extracted_data["cashFlows"] and extracted_data["investmentInitial"] > 0:
+        investment = extracted_data["investmentInitial"]
+        extracted_data["cashFlows"] = [
             investment * 0.3,
             investment * 0.4,
-            investment * 0.5
+            investment * 0.5,
         ]
-    
+
     return extracted_data
 
 
 def calculate_indicators_with_ai(text: str) -> Dict[str, Any]:
-    """
-    Extract financial data with AI and calculate indicators
-    """
     try:
-        # Extract data using AI
         extracted_data = extract_financial_data_with_ai(text)
-        
-        # Calculate indicators
         indicators = calculate_all_indicators(extracted_data)
-        
         return {
-            'extractedData': extracted_data,
-            'indicators': indicators
+            "extractedData": extracted_data,
+            "indicators": indicators,
         }
-        
     except Exception as e:
         raise ValueError(f"Error in AI calculation: {str(e)}")

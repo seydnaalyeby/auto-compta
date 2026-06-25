@@ -9,28 +9,40 @@ const fmt = n => {
   return typeof n === 'number' ? n.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) : n;
 };
 
-const interpretBFR  = v => v < 0 ? { text: 'BFR maîtrisé',            ok: true  } : { text: 'BFR élevé',              ok: false };
-const interpretVAN  = v => v > 0 ? { text: 'Projet rentable',           ok: true  } : { text: 'Projet non rentable',   ok: false };
-const interpretIP   = v => v > 1 ? { text: 'Rentable',                  ok: true  } : { text: 'Non rentable',          ok: false };
+const interpretBFR  = v => v < 0 ? { text: 'BFR maîtrisé',              ok: true  } : { text: 'BFR élevé',              ok: false };
+const interpretVAN  = v => v > 0 ? { text: 'Projet rentable',             ok: true  } : { text: 'Projet non rentable',   ok: false };
+const interpretIP   = v => v > 1 ? { text: 'Rentable',                    ok: true  } : { text: 'Non rentable',          ok: false };
 const interpretDRSI = v => {
   if (v === Infinity) return { text: 'Récupération impossible', ok: false };
-  if (v < 2) return { text: 'Récupération rapide', ok: true };
-  if (v > 4) return { text: 'Risque élevé',        ok: false };
+  if (v < 2) return { text: 'Récupération rapide',  ok: true };
+  if (v > 4) return { text: 'Risque élevé',         ok: false };
   return { text: 'Récupération normale', ok: null };
 };
-const interpretCAF  = v => v > 0 ? { text: 'Bonne capacité financière', ok: true } : { text: 'Difficulté financière', ok: false };
+const interpretCAF  = v => v > 0 ? { text: 'Bonne capacité financière', ok: true } : { text: 'Difficulté financière',   ok: false };
 
 function IndicatorCard({ indicator, data }) {
   if (!data) return null;
-  const rawVal = data[indicator.key];
-  const interp = indicator.interpret(rawVal);
-  const displayVal = indicator.key === 'drsi' && rawVal === Infinity ? 'Jamais' : `${fmt(rawVal)}${indicator.unit ? ' ' + indicator.unit : ''}`;
+  const rawVal  = data[indicator.key];
+  const interp  = indicator.interpret(rawVal);
+  const displayVal = indicator.key === 'drsi' && rawVal === Infinity
+    ? 'Jamais'
+    : `${fmt(rawVal)}${indicator.unit ? ' ' + indicator.unit : ''}`;
+
+  const badgeColors = {
+    true:  { bg: '#ECFDF5', color: '#047857', border: '#86EFAC' },
+    false: { bg: '#FEF2F2', color: '#DC2626', border: '#FECACA' },
+    null:  { bg: '#FFFBEB', color: '#92400E', border: '#FCD34D' },
+  };
+  const bc = badgeColors[String(interp.ok)];
+
   return (
     <div style={s.indicCard} className="card-hover">
       <div style={s.indicTop}>
         <span style={s.indicCode}>{indicator.label}</span>
-        <span style={{ ...s.indicBadge, background: interp.ok === true ? '#ECFDF5' : interp.ok === false ? '#FEF2F2' : '#FFFBEB', color: interp.ok === true ? '#059669' : interp.ok === false ? '#DC2626' : '#D97706' }}>
-          {interp.ok === true ? <IconCheck size={10} color="#059669" /> : interp.ok === false ? <IconAlert size={10} color="#DC2626" /> : '~'}
+        <span style={{ ...s.indicBadge, background: bc.bg, color: bc.color, border: `1px solid ${bc.border}` }}>
+          {interp.ok === true  ? <IconCheck size={10} color="#059669" /> :
+           interp.ok === false ? <IconAlert size={10} color="#DC2626" /> :
+           <span style={{ fontSize: 12 }}>~</span>}
           {interp.text}
         </span>
       </div>
@@ -45,11 +57,11 @@ export default function FinancialIndicatorsDashboard() {
   const { t } = useLanguage();
 
   const INDICATORS = [
-    { key: 'bfr',  label: 'BFR',  name: t('indic.bfr'),  unit: 'MRU', interpret: interpretBFR },
-    { key: 'van',  label: 'VAN',  name: t('indic.van'),  unit: 'MRU', interpret: interpretVAN },
-    { key: 'ip',   label: 'IP',   name: t('indic.ip'),   unit: '',    interpret: interpretIP },
+    { key: 'bfr',  label: 'BFR',  name: t('indic.bfr'),  unit: 'MRU', interpret: interpretBFR  },
+    { key: 'van',  label: 'VAN',  name: t('indic.van'),  unit: 'MRU', interpret: interpretVAN  },
+    { key: 'ip',   label: 'IP',   name: t('indic.ip'),   unit: '',    interpret: interpretIP   },
     { key: 'drsi', label: 'DRSI', name: t('indic.drsi'), unit: 'ans', interpret: interpretDRSI },
-    { key: 'caf',  label: 'CAF',  name: t('indic.caf'),  unit: 'MRU', interpret: interpretCAF },
+    { key: 'caf',  label: 'CAF',  name: t('indic.caf'),  unit: 'MRU', interpret: interpretCAF  },
   ];
 
   const [formData, setFormData] = useState({
@@ -57,19 +69,18 @@ export default function FinancialIndicatorsDashboard() {
     amortization: '', receivables: '', payables: '',
     cashFlows: [''],
   });
-  const [results, setResults] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const [aiText, setAiText] = useState('');
+  const [results,   setResults]   = useState(null);
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState('');
+  const [aiText,    setAiText]    = useState('');
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState('');
+  const [aiError,   setAiError]   = useState('');
   const [aiResults, setAiResults] = useState(null);
 
   const handleInput = e => setFormData(p => ({ ...p, [e.target.name]: e.target.value }));
-  const handleCF = (i, v) => { const cf = [...formData.cashFlows]; cf[i] = v; setFormData(p => ({ ...p, cashFlows: cf })); };
-  const addCF    = () => setFormData(p => ({ ...p, cashFlows: [...p.cashFlows, ''] }));
-  const removeCF = i  => setFormData(p => ({ ...p, cashFlows: p.cashFlows.filter((_, idx) => idx !== i) }));
+  const handleCF    = (i, v) => { const cf = [...formData.cashFlows]; cf[i] = v; setFormData(p => ({ ...p, cashFlows: cf })); };
+  const addCF       = () => setFormData(p => ({ ...p, cashFlows: [...p.cashFlows, ''] }));
+  const removeCF    = i  => setFormData(p => ({ ...p, cashFlows: p.cashFlows.filter((_, idx) => idx !== i) }));
 
   const calculate = async () => {
     setLoading(true); setError('');
@@ -107,8 +118,11 @@ export default function FinancialIndicatorsDashboard() {
   };
 
   if (!user) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
-      <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: '20px 28px', color: '#DC2626', fontWeight: 500 }}>
+    <div className="loading-wrap">
+      <div style={{
+        background: '#FEF2F2', border: '1px solid #FECACA',
+        borderRadius: 14, padding: '20px 28px', color: '#DC2626', fontWeight: 500,
+      }}>
         Veuillez vous connecter pour accéder aux indicateurs financiers.
       </div>
     </div>
@@ -125,20 +139,23 @@ export default function FinancialIndicatorsDashboard() {
 
   return (
     <div className="fade-in">
+      {/* Header */}
       <div style={s.header}>
         <div>
-          <h1 style={s.title}>{t('indic.title')}</h1>
-          <p style={s.subtitle}>{t('indic.subtitle')}</p>
+          <h1 style={s.pageTitle}>{t('indic.title')}</h1>
+          <p style={s.pageSubtitle}>{t('indic.subtitle')}</p>
         </div>
       </div>
 
-      {/* AI Section */}
+      {/* ── AI Section ── */}
       <div style={s.aiCard}>
         <div style={s.aiCardHeader}>
-          <div style={s.aiIconWrap}><IconSparkles size={18} color="#fff" /></div>
+          <div style={s.aiIconWrap}><IconSparkles size={20} color="#fff" /></div>
           <div>
             <h2 style={s.aiTitle}>{t('indic.ai_tab')}</h2>
-            <p style={s.aiSub}>Décrivez votre projet en langage naturel — l'IA extrait les données et calcule les indicateurs.</p>
+            <p style={s.aiSub}>
+              Décrivez votre projet en langage naturel — l'IA extrait les données et calcule les indicateurs.
+            </p>
           </div>
         </div>
 
@@ -152,31 +169,32 @@ export default function FinancialIndicatorsDashboard() {
 
         {aiError && (
           <div style={s.aiError}>
-            <IconAlert size={14} color="#DC2626" />
+            <IconAlert size={14} color="#FCA5A5" />
             <span>{aiError}</span>
           </div>
         )}
 
-        <button onClick={calculateAI} disabled={aiLoading} style={{ ...s.aiBtn, opacity: aiLoading ? 0.75 : 1 }}>
+        <button onClick={calculateAI} disabled={aiLoading}
+          style={{ ...s.aiBtn, opacity: aiLoading ? 0.8 : 1 }}>
           {aiLoading
-            ? <><span className="spinner" /> {t('indic.ai_analyzing')}</>
+            ? <><span className="spinner spinner-dark" style={{ borderColor: 'rgba(91,33,182,0.2)', borderTopColor: '#5B21B6', width: 16, height: 16 }} /> {t('indic.ai_analyzing')}</>
             : <><IconSparkles size={15} color="#5B21B6" /> {t('indic.ai_analyze')}</>}
         </button>
 
         {aiResults && (
           <div style={s.aiResultsWrap} className="fade-in">
             <div style={s.aiResultsHeader}>
-              <IconCheck size={14} color="#059669" />
+              <div style={s.aiResultsIconWrap}><IconCheck size={13} color="#059669" /></div>
               <span style={s.aiResultsTitle}>{t('indic.results')}</span>
             </div>
             <div style={s.extractedGrid}>
               {[
-                { label: 'Investissement', val: `${aiResults.extractedData.investmentInitial?.toLocaleString()} MRU` },
-                { label: "Taux d'actu.", val: `${(aiResults.extractedData.discountRate * 100).toFixed(1)}%` },
-                { label: 'Résultat net', val: `${aiResults.extractedData.netResult?.toLocaleString()} MRU` },
-                { label: 'Amortissement', val: `${aiResults.extractedData.amortization?.toLocaleString()} MRU` },
-                { label: 'Créances', val: `${aiResults.extractedData.receivables?.toLocaleString()} MRU` },
-                { label: 'Dettes', val: `${aiResults.extractedData.payables?.toLocaleString()} MRU` },
+                { label: 'Investissement',      val: `${aiResults.extractedData.investmentInitial?.toLocaleString()} MRU` },
+                { label: "Taux d'actu.",        val: `${(aiResults.extractedData.discountRate * 100).toFixed(1)}%` },
+                { label: 'Résultat net',        val: `${aiResults.extractedData.netResult?.toLocaleString()} MRU` },
+                { label: 'Amortissement',       val: `${aiResults.extractedData.amortization?.toLocaleString()} MRU` },
+                { label: 'Créances',            val: `${aiResults.extractedData.receivables?.toLocaleString()} MRU` },
+                { label: 'Dettes',              val: `${aiResults.extractedData.payables?.toLocaleString()} MRU` },
                 { label: t('indic.cashflow_label'), val: `[${aiResults.extractedData.cashFlows?.map(c => c.toLocaleString()).join(', ')}] MRU` },
               ].map((item, i) => (
                 <div key={i} style={s.extractedItem}>
@@ -187,16 +205,18 @@ export default function FinancialIndicatorsDashboard() {
             </div>
             <p style={s.indicatorsSubtitle}>{t('indic.results')}</p>
             <div style={s.indicGrid}>
-              {INDICATORS.map(ind => <IndicatorCard key={ind.key} indicator={ind} data={aiResults.indicators} />)}
+              {INDICATORS.map(ind => (
+                <IndicatorCard key={ind.key} indicator={ind} data={aiResults.indicators} />
+              ))}
             </div>
           </div>
         )}
       </div>
 
-      {/* Manual form */}
+      {/* ── Manual Form ── */}
       <div style={s.formCard}>
         <div style={s.formCardHeader}>
-          <div style={s.formIconWrap}><IconCalculator size={17} color="#2563EB" /></div>
+          <div style={s.formIconWrap}><IconCalculator size={17} color="#1D4ED8" /></div>
           <div>
             <h2 style={s.formTitle}>{t('indic.manual_tab')}</h2>
             <p style={s.formSub}>Saisissez les données financières pour calculer les indicateurs</p>
@@ -251,14 +271,17 @@ export default function FinancialIndicatorsDashboard() {
         </button>
       </div>
 
+      {/* ── Results ── */}
       {results && (
         <div style={s.resultsCard} className="fade-in">
           <div style={s.resultsHeader}>
-            <div style={s.resultsIconWrap}><IconCheck size={16} color="#059669" /></div>
+            <div style={s.resultsIconWrap}><IconCheck size={15} color="#059669" /></div>
             <h2 style={s.resultsTitle}>{t('indic.results')}</h2>
           </div>
           <div style={s.indicGrid}>
-            {INDICATORS.map(ind => <IndicatorCard key={ind.key} indicator={ind} data={results} />)}
+            {INDICATORS.map(ind => (
+              <IndicatorCard key={ind.key} indicator={ind} data={results} />
+            ))}
           </div>
         </div>
       )}
@@ -267,51 +290,157 @@ export default function FinancialIndicatorsDashboard() {
 }
 
 const s = {
-  header: { marginBottom: 24 },
-  title: { fontSize: 26, fontWeight: 800, color: 'var(--text-1)', letterSpacing: '-0.025em', margin: 0 },
-  subtitle: { marginTop: 4, fontSize: 13, color: 'var(--text-3)' },
-  aiCard: { background: 'linear-gradient(135deg, #1E1B4B 0%, #2D1B69 60%, #4C1D95 100%)', borderRadius: 'var(--radius-lg)', padding: '24px', marginBottom: 20, boxShadow: 'var(--shadow-md)' },
+  header:      { marginBottom: 24 },
+  pageTitle:   { fontSize: 26, fontWeight: 800, color: 'var(--text-1)', letterSpacing: '-0.025em', margin: 0 },
+  pageSubtitle:{ marginTop: 5, fontSize: 13, color: 'var(--text-3)' },
+
+  /* AI Card */
+  aiCard: {
+    background: 'linear-gradient(135deg, #1E1B4B 0%, #2D1B69 55%, #4C1D95 100%)',
+    borderRadius: 'var(--radius-xl)', padding: '26px', marginBottom: 20,
+    boxShadow: '0 10px 40px rgba(76,29,149,0.3)',
+  },
   aiCardHeader: { display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 20 },
-  aiIconWrap: { width: 40, height: 40, borderRadius: 11, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  aiTitle: { fontSize: 17, fontWeight: 700, color: '#fff', margin: 0 },
-  aiSub: { fontSize: 13, color: 'rgba(255,255,255,0.65)', marginTop: 4, lineHeight: 1.5 },
-  aiTextarea: { width: '100%', padding: '13px 14px', background: 'rgba(255,255,255,0.08)', border: '1.5px solid rgba(255,255,255,0.15)', borderRadius: 10, fontSize: 13.5, color: '#fff', resize: 'vertical', lineHeight: 1.6, marginBottom: 12, fontFamily: 'inherit' },
-  aiError: { display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(220,38,38,0.15)', border: '1px solid rgba(220,38,38,0.3)', borderRadius: 8, padding: '9px 12px', marginBottom: 12, fontSize: 13, color: '#FCA5A5' },
-  aiBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '12px', background: '#fff', border: 'none', borderRadius: 10, fontSize: 14.5, fontWeight: 700, color: '#5B21B6', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' },
-  aiResultsWrap: { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: '18px', marginTop: 20 },
-  aiResultsHeader: { display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14 },
+  aiIconWrap: {
+    width: 44, height: 44, borderRadius: 13,
+    background: 'rgba(255,255,255,0.12)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+  },
+  aiTitle: { fontSize: 18, fontWeight: 700, color: '#fff', margin: 0 },
+  aiSub:   { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 5, lineHeight: 1.5 },
+  aiTextarea: {
+    width: '100%', padding: '13px 15px',
+    background: 'rgba(255,255,255,0.08)',
+    border: '1.5px solid rgba(255,255,255,0.14)',
+    borderRadius: 11, fontSize: 13.5, color: '#fff',
+    resize: 'vertical', lineHeight: 1.6, marginBottom: 14,
+    fontFamily: 'inherit', outline: 'none',
+  },
+  aiError: {
+    display: 'flex', alignItems: 'center', gap: 8,
+    background: 'rgba(220,38,38,0.15)', border: '1px solid rgba(220,38,38,0.3)',
+    borderRadius: 9, padding: '9px 13px', marginBottom: 12, fontSize: 13, color: '#FCA5A5',
+  },
+  aiBtn: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+    width: '100%', padding: '12px',
+    background: '#fff', border: 'none', borderRadius: 11,
+    fontSize: 14.5, fontWeight: 700, color: '#5B21B6', cursor: 'pointer',
+    boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+    transition: 'opacity 0.15s, transform 0.15s',
+  },
+  aiResultsWrap: {
+    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
+    borderRadius: 14, padding: '20px', marginTop: 22,
+  },
+  aiResultsHeader: { display: 'flex', alignItems: 'center', gap: 9, marginBottom: 16 },
+  aiResultsIconWrap: {
+    width: 26, height: 26, borderRadius: '50%',
+    background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
   aiResultsTitle: { fontSize: 13.5, fontWeight: 700, color: '#A7F3D0' },
-  extractedGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginBottom: 20 },
-  extractedItem: { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '10px 12px' },
-  extractedLabel: { display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.55)', fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' },
-  extractedValue: { fontSize: 13.5, fontWeight: 700, color: '#fff' },
-  indicatorsSubtitle: { fontSize: 12.5, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 },
-  formCard: { background: 'var(--card)', borderRadius: 'var(--radius-lg)', padding: '24px', marginBottom: 20, boxShadow: 'var(--shadow)', border: '1px solid var(--border)' },
-  formCardHeader: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22, paddingBottom: 16, borderBottom: '1px solid var(--border)' },
-  formIconWrap: { width: 38, height: 38, borderRadius: 10, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  extractedGrid:  {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+    gap: 8, marginBottom: 22,
+  },
+  extractedItem:  {
+    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: 9, padding: '11px 13px',
+  },
+  extractedLabel: {
+    display: 'block', fontSize: 10.5, color: 'rgba(255,255,255,0.5)',
+    fontWeight: 700, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em',
+  },
+  extractedValue: { fontSize: 13.5, fontWeight: 700, color: '#fff', fontVariantNumeric: 'tabular-nums' },
+  indicatorsSubtitle: {
+    fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)',
+    textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 13,
+  },
+
+  /* Manual form */
+  formCard: {
+    background: 'var(--card)', borderRadius: 'var(--radius-xl)',
+    padding: '24px', marginBottom: 20,
+    boxShadow: 'var(--shadow-card)', border: '1px solid var(--border)',
+  },
+  formCardHeader: {
+    display: 'flex', alignItems: 'center', gap: 12,
+    marginBottom: 22, paddingBottom: 16, borderBottom: '1px solid var(--border)',
+  },
+  formIconWrap: {
+    width: 40, height: 40, borderRadius: 11,
+    background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
   formTitle: { fontSize: 15, fontWeight: 700, color: 'var(--text-1)', margin: 0 },
-  formSub: { fontSize: 12, color: 'var(--text-3)', marginTop: 2 },
-  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 16, marginBottom: 20 },
-  field: { display: 'flex', flexDirection: 'column', gap: 5 },
-  label: { fontSize: 12.5, fontWeight: 600, color: 'var(--text-2)' },
-  cfSection: { marginBottom: 20 },
-  cfList: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8, marginBottom: 10 },
-  cfRow: { display: 'flex', alignItems: 'center', gap: 10 },
-  cfLabel: { fontSize: 12.5, fontWeight: 600, color: 'var(--text-3)', minWidth: 60, flexShrink: 0 },
-  cfInput: { flex: 1 },
-  cfRemoveBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA', cursor: 'pointer', flexShrink: 0, transition: 'background 0.15s' },
-  cfAddBtn: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#059669', cursor: 'pointer' },
-  formError: { display: 'flex', alignItems: 'center', gap: 8, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: 13, color: '#DC2626', fontWeight: 500 },
-  calcBtn: { width: '100%', padding: '13px', borderRadius: 10, fontSize: 14.5, fontWeight: 700 },
-  resultsCard: { background: 'var(--card)', borderRadius: 'var(--radius-lg)', padding: '24px', boxShadow: 'var(--shadow)', border: '1px solid var(--border)' },
-  resultsHeader: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)' },
-  resultsIconWrap: { width: 32, height: 32, borderRadius: 9, background: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  formSub:   { fontSize: 12, color: 'var(--text-3)', marginTop: 2 },
+  formGrid: {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))',
+    gap: 16, marginBottom: 22,
+  },
+  field:    { display: 'flex', flexDirection: 'column', gap: 5 },
+  label:    { fontSize: 12.5, fontWeight: 600, color: 'var(--text-2)' },
+  cfSection:{ marginBottom: 22 },
+  cfList:   { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8, marginBottom: 10 },
+  cfRow:    { display: 'flex', alignItems: 'center', gap: 10 },
+  cfLabel:  { fontSize: 12.5, fontWeight: 600, color: 'var(--text-3)', minWidth: 62, flexShrink: 0 },
+  cfInput:  { flex: 1 },
+  cfRemoveBtn: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: 32, height: 32, borderRadius: 9,
+    background: '#FEF2F2', border: '1px solid #FECACA', cursor: 'pointer',
+    flexShrink: 0, transition: 'background 0.15s',
+  },
+  cfAddBtn: {
+    display: 'inline-flex', alignItems: 'center', gap: 7,
+    padding: '8px 15px', background: '#ECFDF5', border: '1px solid #A7F3D0',
+    borderRadius: 9, fontSize: 13, fontWeight: 600, color: '#059669', cursor: 'pointer',
+    transition: 'background 0.15s',
+  },
+  formError: {
+    display: 'flex', alignItems: 'center', gap: 8,
+    background: '#FEF2F2', border: '1px solid #FECACA',
+    borderRadius: 9, padding: '10px 13px', marginBottom: 14,
+    fontSize: 13, color: '#DC2626', fontWeight: 500,
+  },
+  calcBtn: { width: '100%', padding: '13px', borderRadius: 11, fontSize: 14.5, fontWeight: 700 },
+
+  /* Results */
+  resultsCard: {
+    background: 'var(--card)', borderRadius: 'var(--radius-xl)',
+    padding: '24px', boxShadow: 'var(--shadow-card)', border: '1px solid var(--border)',
+  },
+  resultsHeader: {
+    display: 'flex', alignItems: 'center', gap: 10,
+    marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)',
+  },
+  resultsIconWrap: {
+    width: 34, height: 34, borderRadius: 10,
+    background: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
   resultsTitle: { fontSize: 15, fontWeight: 700, color: 'var(--text-1)', margin: 0 },
-  indicGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 },
-  indicCard: { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '18px', boxShadow: 'var(--shadow-sm)' },
-  indicTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 6 },
-  indicCode: { fontSize: 11, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', background: '#F1F5F9', padding: '3px 7px', borderRadius: 5 },
-  indicBadge: { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 99, fontSize: 10.5, fontWeight: 700 },
-  indicValue: { fontSize: 20, fontWeight: 900, color: 'var(--text-1)', letterSpacing: '-0.02em', marginBottom: 4, fontVariantNumeric: 'tabular-nums' },
-  indicName: { fontSize: 11.5, color: 'var(--text-3)', fontWeight: 500, lineHeight: 1.3 },
+  indicGrid:    { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(185px, 1fr))', gap: 14 },
+
+  /* Indicator card */
+  indicCard: {
+    background: 'var(--card)', border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-lg)', padding: '18px',
+    boxShadow: 'var(--shadow-sm)',
+  },
+  indicTop:   { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 13, gap: 6 },
+  indicCode:  {
+    fontSize: 11, fontWeight: 800, color: 'var(--text-3)',
+    textTransform: 'uppercase', letterSpacing: '0.08em',
+    background: '#F1F5F9', padding: '3px 8px', borderRadius: 6,
+  },
+  indicBadge: {
+    display: 'inline-flex', alignItems: 'center', gap: 4,
+    padding: '3px 8px', borderRadius: 99, fontSize: 10.5, fontWeight: 700,
+  },
+  indicValue: {
+    fontSize: 21, fontWeight: 900, color: 'var(--text-1)',
+    letterSpacing: '-0.02em', marginBottom: 5,
+    fontVariantNumeric: 'tabular-nums',
+  },
+  indicName:  { fontSize: 12, color: 'var(--text-3)', fontWeight: 500, lineHeight: 1.3 },
 };

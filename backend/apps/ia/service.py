@@ -1,310 +1,390 @@
-import google.generativeai as genai
-import json
 import base64
+import json
+import re
+import unicodedata
+from decimal import Decimal, InvalidOperation
+
+import google.generativeai as genai
 from django.conf import settings
 
-# Configuration Gemini
-genai.configure(api_key=settings.GEMINI_API_KEY)
 
-# ── Plan Comptable Mauritanien BCM 1988 ──────────────────────────────────────
 PLAN_COMPTABLE_MAURITANIEN = """
-PLAN COMPTABLE BANCAIRE MAURITANIEN (BCM 1988) - RÈGLES D'ENREGISTREMENT
+PLAN COMPTABLE BANCAIRE MAURITANIEN (BCM 1988)
 
-CLASSE 1 - TRÉSORERIE:
-  10 = Caisse (espèces en main)
-    100 = Billets et monnaies
-  11 = Institut d'émission, Trésor Public, CCP
-  12 = Établissements de crédit
-  
-CLASSE 2 - OPÉRATIONS CLIENTÈLE:
-  20 = Crédits à la clientèle
-  21 = Comptes de la clientèle (210=comptes ordinaires)
-  22 = Créances restructurées
-  23 = Créances immobilisées
-  24 = Créances douteuses ou litigieuses
-  26 = Bons de caisse
+Comptes utiles:
+- 100 = Caisse
+- 12 = Banque
+- 210 = Compte client
+- 320 = Fournisseurs
+- 420 = Immobilisations d'exploitation
+- 590 = Capital social
+- 620 = Loyers
+- 630 = Charges externes
+- 650 = Salaires
+- 660 = Impots
+- 702 = Produits des operations avec la clientele
 
-CLASSE 3 - AUTRES COMPTES FINANCIERS:
-  30 = Chèques à recouvrer
-  31 = Comptes d'encaissement
-  32 = Débiteurs et Créditeurs divers
-    320 = Fournisseurs
-    322 = Personnel
-    323 = État et collectivités publiques
-    324 = Sécurité sociale
-    325 = Actionnaires
-    326 = Autres tiers
-  35 = Comptes de régularisation
-  38 = Titres de placement
-
-CLASSE 4 - VALEURS IMMOBILISÉES:
-  40 = Titres de participation
-  42 = Immobilisations corporelles
-    420 = Immobilisations d'exploitation
-    4204 = Matériel d'exploitation
-    4205 = Matériel de transport
-    4206 = Matériel bureau et informatique
-  47 = Frais et valeurs incorporelles
-  48 = Amortissements des immobilisations
-
-CLASSE 5 - CAPITAUX PERMANENTS:
-  52 = Provisions pour risques et charges
-  56 = Résultat net en attente d'affectation
-  58 = Réserves
-  59 = Capital
-    590 = Capital social
-
-CLASSE 6 - CHARGES:
-  60 = Charges d'exploitation bancaire
-  62 = Charges externes liées à l'investissement
-    620 = Locations et charges locatives (LOYER)
-  63 = Charges externes liées à l'activité
-    630 = Transports
-    632 = Frais postaux et télécommunications
-    633 = Honoraires
-    634 = Publicité
-    638 = Charges diverses
-  64 = Charges et pertes diverses
-  65 = Frais de personnel
-    650 = Rémunérations du personnel (SALAIRES)
-    652 = Charges sociales
-  66 = Impôts, taxes et versements assimilés
-    660 = Impôts directs
-    661 = Taxes et impôts indirects
-  68 = Dotations aux amortissements et provisions
-
-CLASSE 7 - PRODUITS:
-  70 = Produits d'exploitation bancaire
-    702 = Produits des opérations avec la clientèle (VENTES)
-    706 = Produits des opérations diverses
-  71 = Produits accessoires
-    711 = Revenus des immeubles
-    712 = Prestations de services
-  74 = Produits et profits divers
-  78 = Reprises sur amortissements et provisions
-
-CLASSE 8 - RÉSULTATS:
-  82 = Résultats d'exploitation
-  85 = Résultat net avant impôt
-  86 = Impôt sur le résultat
-  87 = Résultat net de la période
-
-RÈGLES DE BASE:
-- VENTE au comptant (espèces): DÉBIT 100 (Caisse) / CRÉDIT 702 (Produits ventes)
-- VENTE par banque/virement: DÉBIT 12 (Banque) / CRÉDIT 702 (Produits ventes)  
-- VENTE à crédit (non payé): DÉBIT 210 (Compte client) / CRÉDIT 702 (Produits ventes)
-- ACHAT au comptant (espèces): DÉBIT 320 (Fournisseur) ou compte stock / CRÉDIT 100 (Caisse)
-- ACHAT par banque: DÉBIT compte concerné / CRÉDIT 12 (Banque)
-- ACHAT à crédit: DÉBIT compte concerné / CRÉDIT 320 (Fournisseurs)
-- LOYER payé espèces: DÉBIT 620 (Loyers) / CRÉDIT 100 (Caisse)
-- LOYER payé banque: DÉBIT 620 (Loyers) / CRÉDIT 12 (Banque)
-- LOYER dû non payé: DÉBIT 620 (Loyers) / CRÉDIT 320 (Fournisseurs/Propriétaire)
-- SALAIRE payé: DÉBIT 650 (Salaires) / CRÉDIT 100 (Caisse) ou 12 (Banque)
-- IMPÔT payé: DÉBIT 660 (Impôts) / CRÉDIT 100 (Caisse) ou 12 (Banque)
-- ACHAT matériel: DÉBIT 42 (Immobilisations) / CRÉDIT 100 ou 12
+Regles de base:
+- Vente au comptant: debit 100 / credit 702
+- Vente par banque: debit 12 / credit 702
+- Vente a credit: debit 210 / credit 702
+- Encaissement client: debit 100 ou 12 / credit 210
+- Achat a credit: debit compte concerne / credit 320
+- Loyer paye: debit 620 / credit 100 ou 12
+- Salaire paye: debit 650 / credit 100 ou 12
+- Impot paye: debit 660 / credit 100 ou 12
 """
 
-PROMPT_ANALYSE = """
-Tu es un expert-comptable spécialisé dans le Plan Comptable Bancaire Mauritanien (BCM 1988).
-L'utilisateur va te donner une opération en langage naturel (français ou arabe).
-Tu dois analyser cette opération et retourner UNIQUEMENT un objet JSON valide.
 
-Règles du Plan Comptable Mauritanien à utiliser:
+PROMPT_ANALYSE = """
+Tu es un expert-comptable specialise dans le Plan Comptable Bancaire Mauritanien.
+Analyse l'operation suivante et retourne uniquement un JSON valide.
+
+Regles:
 {plan_comptable}
 
-Texte de l'utilisateur: "{texte}"
+Texte: "{texte}"
 
-Retourne UNIQUEMENT ce JSON (sans explication, sans markdown):
+Priorites obligatoires:
+- Le montant doit reprendre exactement la valeur visible dans le texte.
+- Le moyen de paiement doit respecter le texte: "especes" => caisse, "banque/virement" => banque, "cheque" => cheque, "credit/a credit" => credit.
+- "vendu/vente" => type_operation "vente"
+- "achete/achat" => type_operation "achat"
+- "loyer" => type_operation "loyer"
+- "salaire" => type_operation "salaire"
+- "impot/taxe" => type_operation "impot"
+- "recu/encaisse" => type_operation "encaissement"
+- N'invente ni montant ni moyen de paiement.
+
+Retour attendu:
 {{
   "succes": true,
   "type_operation": "vente|achat|paiement|encaissement|salaire|loyer|impot|autre",
-  "description": "Description courte et claire de l'opération",
-  "montant": 0.00,
+  "description": "Description courte",
+  "montant": 0.0,
   "moyen_paiement": "caisse|banque|cheque|credit",
-  "categorie": "Catégorie du produit/service",
-  "compte_debit": "code compte PCM ex: 100",
-  "libelle_debit": "Nom du compte débité",
-  "compte_credit": "code compte PCM ex: 702",
-  "libelle_credit": "Nom du compte crédité",
-  "explication": "Explication simple pourquoi ces comptes",
+  "categorie": "Categorie",
+  "compte_debit": "100",
+  "libelle_debit": "Nom compte debit",
+  "compte_credit": "702",
+  "libelle_credit": "Nom compte credit",
+  "explication": "Explication simple",
   "questions": []
 }}
 
-Si des informations manquent (montant, moyen paiement), retourne:
+Si des informations sont insuffisantes, retourne:
 {{
   "succes": false,
   "erreur": "information_manquante",
-  "questions": ["Question 1 à poser à l'utilisateur", "Question 2..."]
+  "questions": ["Question 1"]
 }}
 """
 
-PROMPT_CORRECTION = """
-Tu es un expert-comptable spécialisé dans le Plan Comptable Bancaire Mauritanien (BCM 1988).
-On te donne une image ou un texte d'un document comptable (bilan, compte de résultat, journal).
-Tu dois analyser ce document et détecter toutes les erreurs comptables.
 
-Règles du Plan Comptable Mauritanien:
+PROMPT_CORRECTION = """
+Tu es un expert-comptable specialise dans le Plan Comptable Bancaire Mauritanien.
+Analyse le document ci-dessous et retourne uniquement un JSON valide.
+
+Regles:
 {plan_comptable}
 
-Document à analyser:
+Contenu:
 {contenu}
 
-Retourne UNIQUEMENT ce JSON:
+Retour attendu:
 {{
   "document_type": "bilan|compte_resultat|journal|autre",
-  "est_equilibre": true/false,
+  "est_equilibre": true,
   "total_actif": 0,
   "total_passif": 0,
   "total_debit": 0,
   "total_credit": 0,
-  "erreurs": [
-    {{
-      "ligne": "Description de la ligne problématique",
-      "type_erreur": "desequilibre|mauvais_compte|montant_incorrect|autre",
-      "description": "Explication claire de l'erreur",
-      "correction_suggeree": "Comment corriger cette erreur"
-    }}
-  ],
-  "avertissements": ["avertissement 1", "avertissement 2"],
-  "resume": "Résumé général de l'état du document"
+  "erreurs": [],
+  "avertissements": [],
+  "resume": "Resume"
 }}
 """
 
 
-def analyser_operation(texte: str) -> dict:
-    """
-    Analyse un texte en langage naturel et retourne les données comptables
-    """
-    print(f"DEBUG: analyser_operation called with texte: '{texte}'")
-    
+PAYMENT_KEYWORDS = {
+    "credit": ["a credit", "au credit", "a terme", "non paye", "non payee", "creance"],
+    "caisse": ["espece", "especes", "cash", "caisse"],
+    "cheque": ["cheque", "cheques"],
+    "banque": ["banque", "virement", "versement bancaire", "carte", "wave", "bankily"],
+}
+
+TYPE_KEYWORDS = [
+    ("loyer", ["loyer", "location"]),
+    ("encaissement", ["encaisse", "encaissement", "recu paiement", "reglement client", "recu client"]),
+    ("salaire", ["salaire", "salaires", "paye employe", "versement employe"]),
+    ("impot", ["impot", "impots", "taxe", "taxes", "tva"]),
+    ("vente", ["vendu", "vente", "vendre", "vendues", "vendus"]),
+    ("achat", ["achat", "achete", "achetee", "achetes", "acheter", "approvisionnement", "stock"]),
+    ("paiement", ["paye", "paye", "payer", "regle", "reglement", "depense", "depenses"]),
+]
+
+TYPE_CATEGORIES = {
+    "vente": "Ventes",
+    "achat": "Achats",
+    "encaissement": "Encaissements",
+    "paiement": "Charges",
+    "loyer": "Charges locatives",
+    "salaire": "Charges de personnel",
+    "impot": "Impots et taxes",
+    "autre": "Divers",
+}
+
+TYPE_DESCRIPTIONS = {
+    "vente": "Vente enregistree",
+    "achat": "Achat enregistre",
+    "encaissement": "Encaissement enregistre",
+    "paiement": "Paiement enregistre",
+    "loyer": "Paiement de loyer",
+    "salaire": "Paiement de salaire",
+    "impot": "Paiement d'impot",
+    "autre": "Operation diverse",
+}
+
+
+def _get_gemini_model():
+    api_key = getattr(settings, "GEMINI_API_KEY", "")
+    if not api_key:
+        return None
+
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel(getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash"))
+
+
+def _strip_markdown_json(text):
+    cleaned = text.strip()
+    if "```json" in cleaned:
+        cleaned = cleaned.split("```json", 1)[1].split("```", 1)[0].strip()
+    elif "```" in cleaned:
+        cleaned = cleaned.split("```", 1)[1].split("```", 1)[0].strip()
+    return cleaned
+
+
+def _normalize_text(text):
+    normalized = unicodedata.normalize("NFKD", text or "")
+    return "".join(char for char in normalized if not unicodedata.combining(char)).lower()
+
+
+def _decimal_from_string(value):
+    cleaned = (value or "").strip().replace("\xa0", "").replace(" ", "")
+    if not cleaned:
+        return None
+
+    if "," in cleaned and "." in cleaned:
+        if cleaned.rfind(",") > cleaned.rfind("."):
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+    elif "," in cleaned:
+        if cleaned.count(",") == 1 and len(cleaned.split(",")[-1]) <= 2:
+            cleaned = cleaned.replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+    elif "." in cleaned and cleaned.count(".") > 1:
+        cleaned = cleaned.replace(".", "")
+
     try:
-        print("DEBUG: Attempting to use Gemini AI...")
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        return Decimal(cleaned)
+    except InvalidOperation:
+        return None
+
+
+def _extract_amount(texte):
+    currency_pattern = re.compile(r"(\d[\d\s.,]*)\s*(mru|mrus|ouguiya|ouguiyas|um)\b", re.IGNORECASE)
+    generic_pattern = re.compile(r"(?<!\d)(\d[\d\s.,]*)(?!\d)")
+
+    currency_matches = [match.group(1) for match in currency_pattern.finditer(texte or "")]
+    for candidate in reversed(currency_matches):
+        amount = _decimal_from_string(candidate)
+        if amount and amount > 0:
+            return amount
+
+    generic_amounts = []
+    for match in generic_pattern.finditer(texte or ""):
+        amount = _decimal_from_string(match.group(1))
+        if amount and amount >= 100:
+            generic_amounts.append(amount)
+    if generic_amounts:
+        return max(generic_amounts)
+
+    return None
+
+
+def _detect_payment_method(texte, fallback="caisse"):
+    normalized = _normalize_text(texte)
+    for payment_method in ("credit", "caisse", "cheque", "banque"):
+        if any(_contains_keyword(normalized, keyword) for keyword in PAYMENT_KEYWORDS[payment_method]):
+            return payment_method
+
+    fallback = (fallback or "").strip().lower()
+    if fallback in {"caisse", "banque", "cheque", "credit"}:
+        return fallback
+    return "caisse"
+
+
+def _detect_operation_type(texte, fallback="autre"):
+    normalized = _normalize_text(texte)
+    for operation_type, keywords in TYPE_KEYWORDS:
+        if any(_contains_keyword(normalized, keyword) for keyword in keywords):
+            return operation_type
+
+    fallback = (fallback or "").strip().lower()
+    if fallback in TYPE_CATEGORIES:
+        return fallback
+    return "autre"
+
+
+def _build_accounts(operation_type, payment_method):
+    payment_account = {
+        "caisse": ("100", "Caisse"),
+        "banque": ("12", "Banque"),
+        "cheque": ("12", "Banque"),
+        "credit": ("210", "Compte client"),
+    }
+
+    if operation_type == "vente":
+        debit = payment_account[payment_method]
+        return debit[0], debit[1], "702", "Produits des operations avec la clientele"
+
+    if operation_type == "encaissement":
+        debit = payment_account["caisse" if payment_method == "credit" else payment_method]
+        return debit[0], debit[1], "210", "Compte client"
+
+    if operation_type == "achat":
+        credit = ("320", "Fournisseurs") if payment_method == "credit" else payment_account[payment_method]
+        return "600", "Achats de marchandises", credit[0], credit[1]
+
+    if operation_type == "loyer":
+        credit = ("320", "Fournisseurs") if payment_method == "credit" else payment_account[payment_method]
+        return "620", "Loyers", credit[0], credit[1]
+
+    if operation_type == "salaire":
+        credit = payment_account["banque" if payment_method == "credit" else payment_method]
+        return "650", "Salaires", credit[0], credit[1]
+
+    if operation_type == "impot":
+        credit = payment_account["banque" if payment_method == "credit" else payment_method]
+        return "660", "Impots", credit[0], credit[1]
+
+    if operation_type == "paiement":
+        credit = payment_account["banque" if payment_method == "credit" else payment_method]
+        return "630", "Charges externes", credit[0], credit[1]
+
+    debit = payment_account["caisse" if payment_method == "credit" else payment_method]
+    return debit[0], debit[1], "702", "Produits des operations avec la clientele"
+
+
+def _contains_keyword(text, keyword):
+    pattern = r"(?<!\w)" + re.escape(keyword) + r"(?!\w)"
+    return re.search(pattern, text) is not None
+
+
+def normaliser_analyse_operation(texte, analyse=None):
+    analyse = analyse or {}
+    amount = _extract_amount(texte)
+    operation_type = _detect_operation_type(texte, analyse.get("type_operation", "autre"))
+    payment_method = _detect_payment_method(texte, analyse.get("moyen_paiement", "caisse"))
+
+    if amount is None:
+        raw_amount = analyse.get("montant")
+        amount = _decimal_from_string(str(raw_amount)) if raw_amount not in (None, "") else Decimal("0")
+    if not amount or amount <= 0:
+        return {
+            "succes": False,
+            "erreur": "information_manquante",
+            "questions": ["Quel est le montant exact de l'operation ?"],
+        }
+
+    compte_debit, libelle_debit, compte_credit, libelle_credit = _build_accounts(
+        operation_type,
+        payment_method,
+    )
+
+    description = (analyse.get("description") or "").strip()
+    if not description or description.lower() in {"operation diverse", "vente de produits", "achat de fournitures"}:
+        description = TYPE_DESCRIPTIONS[operation_type]
+
+    return {
+        "succes": True,
+        "type_operation": operation_type,
+        "description": description,
+        "montant": float(amount),
+        "moyen_paiement": payment_method,
+        "categorie": analyse.get("categorie") or TYPE_CATEGORIES[operation_type],
+        "compte_debit": compte_debit,
+        "libelle_debit": libelle_debit,
+        "compte_credit": compte_credit,
+        "libelle_credit": libelle_credit,
+        "explication": analyse.get("explication")
+        or "Analyse verifiee a partir du texte saisi pour conserver le montant, le type et le moyen de paiement exacts.",
+        "questions": analyse.get("questions", []),
+    }
+
+
+def analyser_operation(texte: str) -> dict:
+    if not texte or not texte.strip():
+        return {"succes": False, "erreur": "Aucun texte fourni", "questions": []}
+
+    try:
+        model = _get_gemini_model()
+        if model is None:
+            return _fallback_analysis(texte)
+
         prompt = PROMPT_ANALYSE.format(
             plan_comptable=PLAN_COMPTABLE_MAURITANIEN,
-            texte=texte
+            texte=texte,
         )
-        print(f"DEBUG: Generated prompt length: {len(prompt)}")
         response = model.generate_content(prompt)
-        texte_reponse = response.text.strip()
-        print(f"DEBUG: Gemini response: '{texte_reponse}'")
+        resultat = json.loads(_strip_markdown_json(response.text))
+        return normaliser_analyse_operation(texte, resultat)
+    except Exception:
+        return _fallback_analysis(texte)
 
-        # Nettoyer la réponse (enlever markdown si présent)
-        if '```json' in texte_reponse:
-            texte_reponse = texte_reponse.split('```json')[1].split('```')[0].strip()
-        elif '```' in texte_reponse:
-            texte_reponse = texte_reponse.split('```')[1].split('```')[0].strip()
-
-        print(f"DEBUG: Cleaned response: '{texte_reponse}'")
-        resultat = json.loads(texte_reponse)
-        print(f"DEBUG: Parsed JSON result: {resultat}")
-        return resultat
-
-    except json.JSONDecodeError as e:
-        print(f"DEBUG: JSON decode error: {e}")
-        return {
-            'succes': False,
-            'erreur': f'Réponse IA invalide - réessayez. Erreur: {str(e)}',
-            'questions': []
-        }
-    except Exception as e:
-        print(f"DEBUG: Exception in analyser_operation: {e}")
-        # Fallback si l'API Gemini n'est pas disponible (quota dépassé)
-        if "429" in str(e) or "quota" in str(e).lower():
-            print("DEBUG: Using fallback analysis due to quota/API issues")
-            return _fallback_analysis(texte)
-        else:
-            print(f"DEBUG: Returning error response: {str(e)}")
-            return {"succes": False, "erreur": f"Erreur d'analyse: {str(e)}"}
 
 def _fallback_analysis(texte):
-    """
-    Analyse de fallback quand l'API Gemini n'est pas disponible
-    """
-    texte_lower = texte.lower()
-    
-    # Analyse simple basée sur des mots-clés
-    if "vente" in texte_lower or "vendre" in texte_lower:
-        return {
+    return normaliser_analyse_operation(
+        texte,
+        {
             "succes": True,
-            "type_operation": "vente",
-            "description": "Vente de produits",
-            "montant": 15000.0,
-            "moyen_paiement": "caisse" if "espèce" in texte_lower else "banque",
-            "categorie": "Ventes",
-            "compte_debit": "531 - Caisse",
-            "compte_credit": "701 - Ventes de marchandises",
-            "explication": "Enregistrement d'une vente selon le PCM BCM 1988"
-        }
-    elif "loyer" in texte_lower or "location" in texte_lower:
-        return {
-            "succes": True,
-            "type_operation": "loyer",
-            "description": "Paiement loyer",
-            "montant": 25000.0,
-            "moyen_paiement": "banque",
-            "categorie": "Charges locatives",
-            "compte_debit": "612 - Locations et charges locatives",
-            "compte_credit": "512 - Banque",
-            "explication": "Enregistrement du loyer selon le PCM BCM 1988"
-        }
-    elif "achat" in texte_lower or "acheter" in texte_lower:
-        return {
-            "succes": True,
-            "type_operation": "achat",
-            "description": "Achat de fournitures",
-            "montant": 10000.0,
-            "moyen_paiement": "caisse" if "espèce" in texte_lower else "banque",
-            "categorie": "Achats",
-            "compte_debit": "601 - Achats de marchandises",
-            "compte_credit": "531 - Caisse" if "espèce" in texte_lower else "512 - Banque",
-            "explication": "Enregistrement d'un achat selon le PCM BCM 1988"
-        }
-    else:
-        return {
-            "succes": True,
-            "type_operation": "paiement",
-            "description": "Opération diverses",
-            "montant": 5000.0,
+            "type_operation": "autre",
+            "description": "",
+            "montant": 0,
             "moyen_paiement": "caisse",
-            "categorie": "Divers",
-            "compte_debit": "531 - Caisse",
-            "compte_credit": "708 - Produits divers",
-            "explication": "Enregistrement d'une opération selon le PCM BCM 1988"
-        }
+            "categorie": "",
+            "questions": [],
+        },
+    )
 
 
 def corriger_document(contenu_texte: str = None, image_base64: str = None) -> dict:
-    """Analyse un document comptable (texte ou image) et détecte les erreurs"""
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = _get_gemini_model()
+        if model is None:
+            return {
+                "erreur": "Aucune cle Gemini configuree.",
+                "erreurs": [],
+            }
 
         if image_base64:
-            # Analyse d'une image
             image_data = base64.b64decode(image_base64)
             prompt = PROMPT_CORRECTION.format(
                 plan_comptable=PLAN_COMPTABLE_MAURITANIEN,
-                contenu="[Image du document comptable ci-jointe]"
+                contenu="[Image du document comptable]",
             )
-            response = model.generate_content([
-                prompt,
-                {"mime_type": "image/jpeg", "data": image_data}
-            ])
+            response = model.generate_content(
+                [prompt, {"mime_type": "image/jpeg", "data": image_data}]
+            )
         else:
-            # Analyse d'un texte
             prompt = PROMPT_CORRECTION.format(
                 plan_comptable=PLAN_COMPTABLE_MAURITANIEN,
-                contenu=contenu_texte
+                contenu=contenu_texte or "",
             )
             response = model.generate_content(prompt)
 
-        texte_reponse = response.text.strip()
-        if '```json' in texte_reponse:
-            texte_reponse = texte_reponse.split('```json')[1].split('```')[0].strip()
-        elif '```' in texte_reponse:
-            texte_reponse = texte_reponse.split('```')[1].split('```')[0].strip()
-
-        return json.loads(texte_reponse)
-
-    except Exception as e:
-        return {'erreur': str(e), 'erreurs': []}
+        return json.loads(_strip_markdown_json(response.text))
+    except Exception as exc:
+        return {"erreur": str(exc), "erreurs": []}

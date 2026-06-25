@@ -19,84 +19,107 @@ export default function Auth() {
   const change = e => setForm({ ...form, [e.target.name]: e.target.value });
 
   const submit = async e => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+    e.preventDefault(); setError(''); setLoading(true);
     try {
-      if (mode === 'connexion') {
-        await seConnecter({ username: form.username, password: form.password });
-      } else {
-        await sInscrire(form);
-      }
+      if (mode === 'connexion') await seConnecter({ username: form.username, password: form.password });
+      else await sInscrire(form);
       navigate('/dashboard');
     } catch (err) {
       const d = err.response?.data;
       setError(typeof d === 'object' ? Object.values(d).flat().join(' ') : 'Erreur de connexion.');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const FEATURES = [
-    t('auth.feature_1'),
-    t('auth.feature_2'),
-    t('auth.feature_3'),
-    t('auth.feature_4'),
-    t('auth.feature_5'),
+    t('auth.feature_1'), t('auth.feature_2'), t('auth.feature_3'),
+    t('auth.feature_4'), t('auth.feature_5'),
   ];
 
-  const fontFamily = isRTL
-    ? "'Tajawal', 'Arial', sans-serif"
-    : "'Inter', sans-serif";
+  const font = isRTL ? "'Tajawal', Arial, sans-serif" : "'Plus Jakarta Sans', system-ui, sans-serif";
 
   return (
-    <div style={{ ...s.page, direction: isRTL ? 'rtl' : 'ltr', fontFamily }}>
-      {/* Left panel */}
+    <div style={{ ...s.page, direction: isRTL ? 'rtl' : 'ltr', fontFamily: font }}>
+
+      {/* ══════ LEFT PANEL ══════ */}
       <div style={s.left}>
+        {/* Decorative rings */}
+        <div style={{ ...s.ring, width: 480, height: 480, top: -160, right: -160, opacity: 0.04 }} />
+        <div style={{ ...s.ring, width: 300, height: 300, bottom: -60, left: -100, opacity: 0.04 }} />
+        <div style={{ ...s.dot, top: '28%', right: '14%' }} />
+        <div style={{ ...s.dot, bottom: '32%', left: '16%', width: 7, height: 7 }} />
+
         <div style={s.leftInner}>
-          <div style={s.badge}>
-            <span style={s.badgeLetters}>AC</span>
+          {/* Brand */}
+          <div style={s.brand}>
+            <div style={s.brandIcon}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path d="M3 3h7v7H3z" fill="#93C5FD"/>
+                <path d="M14 3h7v7h-7z" fill="#A5B4FC" opacity=".9"/>
+                <path d="M3 14h7v7H3z" fill="#6EE7B7" opacity=".9"/>
+                <path d="M14 14h7v7h-7z" fill="#FDE68A" opacity=".9"/>
+              </svg>
+            </div>
+            <span style={s.brandName}>Auto-Compta</span>
           </div>
-          <h1 style={s.brand}>Auto-Compta</h1>
+
+          <h1 style={s.hero}>
+            {isRTL
+              ? 'محاسبة ذكية لمؤسستك'
+              : 'La comptabilité\nintelligente'}
+          </h1>
           <p style={s.tagline}>
             {isRTL
-              ? 'محاسبة ذكية للمؤسسات الصغيرة والمتوسطة الموريتانية، مدعومة بالذكاء الاصطناعي.'
-              : "Comptabilité intelligente pour les PME mauritaniennes, propulsée par l'IA."}
+              ? 'حلول محاسبية متكاملة للمؤسسات الصغيرة والمتوسطة الموريتانية، مدعومة بالذكاء الاصطناعي.'
+              : "Conforme au Plan Comptable Mauritanien BCM 1988. Propulsé par l'IA Gemini."}
           </p>
+
+          {/* Features */}
           <div style={s.featureList}>
             {FEATURES.map((f, i) => (
-              <div key={i} style={s.featureItem}>
-                <div style={s.checkCircle}>
-                  <IconCheck size={11} color="#fff" />
-                </div>
+              <div key={i} style={s.feature}>
+                <div style={s.checkWrap}><IconCheck size={10} color="#60A5FA" /></div>
                 <span style={s.featureText}>{f}</span>
               </div>
             ))}
           </div>
-          <div style={s.leftFooter}>
-            <span style={s.footerText}>
-              {isRTL ? 'متوافق مع المخطط المحاسبي BCM 1988' : 'Conforme au Plan Comptable BCM 1988'}
-            </span>
+
+          {/* Stats bar */}
+          <div style={s.statsBar}>
+            {[
+              { v: 'BCM', l: isRTL ? 'المعيار' : 'Norme' },
+              { v: 'PCM', l: isRTL ? 'المخطط' : 'Plan' },
+              { v: '1988', l: isRTL ? 'إصدار' : 'Version' },
+            ].map((stat, i, arr) => (
+              <React.Fragment key={i}>
+                <div style={s.statItem}>
+                  <span style={s.statVal}>{stat.v}</span>
+                  <span style={s.statLbl}>{stat.l}</span>
+                </div>
+                {i < arr.length - 1 && <div style={s.statSep} />}
+              </React.Fragment>
+            ))}
           </div>
         </div>
-        <div style={{ ...s.decor, width: 320, height: 320, top: -80, right: -80, opacity: 0.06 }} />
-        <div style={{ ...s.decor, width: 200, height: 200, bottom: 40, left: -60, opacity: 0.05 }} />
       </div>
 
-      {/* Right panel */}
+      {/* ══════ RIGHT PANEL ══════ */}
       <div style={s.right}>
-        {/* Language toggle on auth page */}
-        <div style={s.langToggleAuth}>
-          <button onClick={() => setLang('fr')} style={{ ...s.langBtn, ...(lang === 'fr' ? s.langBtnActive : {}) }}>FR</button>
-          <button onClick={() => setLang('ar')} style={{ ...s.langBtn, ...(lang === 'ar' ? s.langBtnActive : {}) }}>ع</button>
+        {/* Language toggle */}
+        <div style={s.langRow}>
+          {['fr', 'ar'].map(l => (
+            <button key={l} onClick={() => setLang(l)}
+              style={{ ...s.langBtn, ...(lang === l ? s.langBtnOn : {}) }}>
+              {l === 'fr' ? 'FR' : 'ع'}
+            </button>
+          ))}
         </div>
 
-        <div style={s.formBox}>
+        <div style={s.formWrap}>
+          {/* Tabs */}
           <div style={s.tabs}>
             {['connexion', 'inscription'].map(m => (
-              <button key={m}
-                onClick={() => { setMode(m); setError(''); }}
-                style={{ ...s.tab, ...(mode === m ? s.tabActive : {}) }}>
+              <button key={m} onClick={() => { setMode(m); setError(''); }}
+                style={{ ...s.tab, ...(mode === m ? s.tabOn : {}) }}>
                 {m === 'connexion' ? t('auth.login_tab') : t('auth.register_tab')}
               </button>
             ))}
@@ -104,7 +127,7 @@ export default function Auth() {
 
           <h2 style={s.formTitle}>
             {mode === 'connexion'
-              ? (isRTL ? 'مرحباً بعودتك!' : 'Bon retour !')
+              ? (isRTL ? 'مرحباً بعودتك !' : 'Bon retour !')
               : (isRTL ? 'إنشاء حسابك' : 'Créer votre compte')}
           </h2>
           <p style={s.formSub}>
@@ -115,41 +138,60 @@ export default function Auth() {
 
           {error && (
             <div style={s.errBox}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.5">
+                <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+              </svg>
               <span style={s.errText}>{error}</span>
             </div>
           )}
 
           <form onSubmit={submit} style={s.form}>
-            <Field label={isRTL ? 'اسم المستخدم' : "Nom d'utilisateur"} name="username" value={form.username}
-              onChange={change} placeholder={isRTL ? 'المعرف' : 'votre_identifiant'} required />
+            <Field label={isRTL ? 'اسم المستخدم' : "Nom d'utilisateur"}
+              name="username" value={form.username} onChange={change}
+              placeholder={isRTL ? 'المعرف' : 'votre_identifiant'} required />
 
             {mode === 'inscription' && <>
-              <Field label={t('auth.email')} name="email" type="email" value={form.email}
-                onChange={change} placeholder="vous@exemple.com" required />
-              <Field label={t('auth.company')} name="nom_entreprise" value={form.nom_entreprise}
-                onChange={change} placeholder="Ma Société SARL" required />
-              <div style={s.row}>
+              <Field label={t('auth.email')} name="email" type="email"
+                value={form.email} onChange={change} placeholder="vous@exemple.com" required />
+              <Field label={t('auth.company')} name="nom_entreprise"
+                value={form.nom_entreprise} onChange={change} placeholder="Ma Société SARL" required />
+              <div style={s.twoCol}>
                 <Field label={t('auth.sector')} name="secteur" value={form.secteur}
-                  onChange={change} placeholder={isRTL ? 'تجارة، صيدلانية…' : 'Commerce, Pharmacie…'} />
-                <Field label={isRTL ? 'الهاتف' : 'Téléphone'} name="telephone" value={form.telephone}
-                  onChange={change} placeholder="+222 XX XX XX XX" />
+                  onChange={change} placeholder={isRTL ? 'تجارة…' : 'Commerce…'} />
+                <Field label={isRTL ? 'الهاتف' : 'Téléphone'} name="telephone"
+                  value={form.telephone} onChange={change} placeholder="+222 XX XX XX" />
               </div>
             </>}
 
-            <Field label={t('auth.password')} name="password" type="password" value={form.password}
-              onChange={change} placeholder="••••••••" required />
+            <Field label={t('auth.password')} name="password" type="password"
+              value={form.password} onChange={change} placeholder="••••••••" required />
 
             {mode === 'inscription' && (
-              <Field label={isRTL ? 'تأكيد كلمة المرور' : 'Confirmer le mot de passe'} name="password2" type="password"
+              <Field label={isRTL ? 'تأكيد كلمة المرور' : 'Confirmer le mot de passe'}
+                name="password2" type="password"
                 value={form.password2} onChange={change} placeholder="••••••••" required />
             )}
 
             <button type="submit" style={{ ...s.submitBtn, opacity: loading ? 0.75 : 1 }} disabled={loading}>
               {loading
-                ? <><span className="spinner" /> &nbsp;{mode === 'connexion' ? t('auth.loading') : t('auth.registering')}</>
+                ? <><span className="spinner" />&nbsp;{mode === 'connexion' ? t('auth.loading') : t('auth.registering')}</>
                 : mode === 'connexion' ? t('auth.submit_login') : t('auth.submit_register')}
             </button>
           </form>
+
+          <div style={s.footer}>
+            <span style={s.footerText}>
+              {mode === 'connexion'
+                ? (isRTL ? 'ليس لديك حساب؟' : "Pas encore de compte ?")
+                : (isRTL ? 'لديك حساب؟' : "Vous avez déjà un compte ?")}
+            </span>
+            <button onClick={() => { setMode(mode === 'connexion' ? 'inscription' : 'connexion'); setError(''); }}
+              style={s.switchBtn}>
+              {mode === 'connexion'
+                ? (isRTL ? 'أنشئ حساباً' : "Créer un compte")
+                : (isRTL ? 'تسجيل الدخول' : "Se connecter")}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -158,45 +200,145 @@ export default function Auth() {
 
 function Field({ label, name, type = 'text', value, onChange, placeholder, required }) {
   return (
-    <div style={s.field}>
-      <label style={s.label}>{label}</label>
+    <div style={sf.field}>
+      <label style={sf.label}>{label}</label>
       <input name={name} type={type} value={value} onChange={onChange}
-        placeholder={placeholder} required={required} style={s.input} />
+        placeholder={placeholder} required={required}
+        className="input-field" style={sf.input} />
     </div>
   );
 }
 
 const s = {
-  page: { display: 'flex', minHeight: '100vh' },
-  left: { flex: '0 0 42%', background: 'linear-gradient(160deg, #0F172A 0%, #1E3A8A 60%, #1D4ED8 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 48px', position: 'relative', overflow: 'hidden' },
-  leftInner: { position: 'relative', zIndex: 2, maxWidth: 380 },
-  badge: { width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #60A5FA, #A78BFA)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24, boxShadow: '0 8px 24px rgba(96,165,250,0.35)' },
-  badgeLetters: { color: '#fff', fontWeight: 900, fontSize: 20, letterSpacing: '-0.02em' },
-  brand: { color: '#fff', fontSize: 32, fontWeight: 900, letterSpacing: '-0.03em', marginBottom: 12, lineHeight: 1.1 },
-  tagline: { color: 'rgba(255,255,255,0.65)', fontSize: 15, lineHeight: 1.6, marginBottom: 36 },
-  featureList: { display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 48 },
-  featureItem: { display: 'flex', alignItems: 'center', gap: 12 },
-  checkCircle: { width: 20, height: 20, borderRadius: '50%', background: 'rgba(96,165,250,0.2)', border: '1.5px solid rgba(96,165,250,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  featureText: { color: 'rgba(255,255,255,0.75)', fontSize: 13.5, fontWeight: 400 },
-  leftFooter: { paddingTop: 20, borderTop: '1px solid rgba(255,255,255,0.1)' },
-  footerText: { color: 'rgba(255,255,255,0.35)', fontSize: 12 },
-  decor: { position: 'absolute', borderRadius: '50%', background: '#fff', pointerEvents: 'none' },
-  right: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC', padding: '40px 24px', position: 'relative' },
-  langToggleAuth: { position: 'absolute', top: 20, right: 20, display: 'flex', background: '#E2E8F0', borderRadius: 8, padding: 3, gap: 2 },
-  langBtn: { padding: '4px 12px', borderRadius: 6, border: 'none', background: 'transparent', color: '#64748B', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' },
-  langBtnActive: { background: '#fff', color: '#2563EB', boxShadow: '0 1px 4px rgba(0,0,0,0.1)' },
-  formBox: { background: '#fff', borderRadius: 20, padding: '40px 36px', width: '100%', maxWidth: 440, boxShadow: '0 8px 32px rgba(0,0,0,0.08)', border: '1px solid #E2E8F0' },
-  tabs: { display: 'flex', borderRadius: 10, background: '#F1F5F9', padding: 4, marginBottom: 28 },
-  tab: { flex: 1, padding: '9px 0', borderRadius: 7, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13.5, fontWeight: 500, color: '#64748B', transition: 'background 0.15s, color 0.15s' },
-  tabActive: { background: '#fff', color: '#0F172A', fontWeight: 700, boxShadow: '0 1px 4px rgba(0,0,0,0.1)' },
-  formTitle: { fontSize: 22, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', marginBottom: 6 },
-  formSub: { fontSize: 13, color: '#64748B', marginBottom: 24 },
-  errBox: { background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 9, padding: '10px 14px', marginBottom: 16 },
-  errText: { color: '#DC2626', fontSize: 13, fontWeight: 500 },
-  form: { display: 'flex', flexDirection: 'column', gap: 14 },
-  row: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
-  field: { display: 'flex', flexDirection: 'column', gap: 5 },
-  label: { fontSize: 12.5, fontWeight: 600, color: '#374151', letterSpacing: '0.01em' },
-  input: { padding: '11px 13px', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 14, color: '#0F172A', background: '#FAFAFA', transition: 'border-color 0.15s', outline: 'none' },
-  submitBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px 0', background: 'linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 4, boxShadow: '0 4px 16px rgba(37,99,235,0.35)', transition: 'opacity 0.15s', letterSpacing: '-0.01em' },
+  page: { display: 'flex', minHeight: '100vh', fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" },
+
+  /* Left */
+  left: {
+    flex: '0 0 44%',
+    background: 'linear-gradient(145deg, #0A1628 0%, #0F2040 45%, #162E5C 75%, #1D4ED8 100%)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    padding: '60px 52px', position: 'relative', overflow: 'hidden',
+  },
+  leftInner: { position: 'relative', zIndex: 2, maxWidth: 400, width: '100%' },
+  ring: { position: 'absolute', borderRadius: '50%', border: '1px solid #fff', pointerEvents: 'none' },
+  dot:  { position: 'absolute', width: 10, height: 10, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', pointerEvents: 'none' },
+
+  brand: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 },
+  brandIcon: {
+    width: 44, height: 44, borderRadius: 13,
+    background: 'rgba(255,255,255,0.1)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1)',
+  },
+  brandName: { color: '#fff', fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em' },
+
+  hero: {
+    fontSize: 38, fontWeight: 900, color: '#fff',
+    letterSpacing: '-0.04em', lineHeight: 1.15, marginBottom: 16,
+    whiteSpace: 'pre-line',
+  },
+  tagline: { color: 'rgba(255,255,255,0.5)', fontSize: 14.5, lineHeight: 1.7, marginBottom: 36 },
+
+  featureList: { display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 36 },
+  feature: { display: 'flex', alignItems: 'center', gap: 12 },
+  checkWrap: {
+    width: 22, height: 22, borderRadius: '50%',
+    background: 'rgba(96,165,250,0.12)',
+    border: '1.5px solid rgba(96,165,250,0.35)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  featureText: { color: 'rgba(255,255,255,0.65)', fontSize: 13.5, fontWeight: 400, lineHeight: 1.4 },
+
+  statsBar: {
+    display: 'flex', alignItems: 'center',
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: 14, padding: '14px 22px',
+  },
+  statItem:  { flex: 1, textAlign: 'center' },
+  statVal:   { display: 'block', color: '#93C5FD', fontSize: 17, fontWeight: 900, letterSpacing: '-0.01em' },
+  statLbl:   { display: 'block', color: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' },
+  statSep:   { width: 1, height: 38, background: 'rgba(255,255,255,0.08)', flexShrink: 0 },
+
+  /* Right */
+  right: {
+    flex: 1, display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center',
+    background: '#F5F7FD', padding: '40px 24px', position: 'relative',
+  },
+  langRow: {
+    position: 'absolute', top: 22, right: 22,
+    display: 'flex', background: '#E8EDF7', borderRadius: 10, padding: 3, gap: 2,
+  },
+  langBtn: {
+    padding: '5px 14px', borderRadius: 8, border: 'none',
+    background: 'transparent', color: '#6B7A99',
+    fontSize: 12, fontWeight: 800, cursor: 'pointer', transition: 'all 0.15s',
+  },
+  langBtnOn: { background: '#fff', color: '#2563EB', boxShadow: '0 1px 6px rgba(0,0,0,0.12)' },
+
+  formWrap: {
+    background: '#fff', borderRadius: 24,
+    padding: '40px 40px', width: '100%', maxWidth: 460,
+    boxShadow: '0 4px 6px rgba(13,21,38,0.04), 0 20px 60px rgba(13,21,38,0.10)',
+    border: '1px solid rgba(13,21,38,0.06)',
+  },
+
+  tabs: {
+    display: 'flex', background: '#F0F4FB', borderRadius: 12, padding: 4, gap: 3, marginBottom: 28,
+  },
+  tab: {
+    flex: 1, padding: '9px', border: 'none', borderRadius: 9,
+    background: 'transparent', cursor: 'pointer',
+    fontSize: 13.5, fontWeight: 600, color: '#6B7A99',
+    transition: 'all 0.15s',
+  },
+  tabOn: {
+    background: '#fff', color: '#0D1526', fontWeight: 800,
+    boxShadow: '0 1px 6px rgba(0,0,0,0.1)',
+  },
+
+  formTitle: {
+    fontSize: 24, fontWeight: 900, color: '#0D1526',
+    letterSpacing: '-0.025em', marginBottom: 6,
+  },
+  formSub: { fontSize: 13.5, color: '#6B7A99', marginBottom: 24, lineHeight: 1.5 },
+
+  errBox: {
+    display: 'flex', alignItems: 'center', gap: 9,
+    background: '#FEF2F2', border: '1px solid #FECACA',
+    borderRadius: 10, padding: '11px 14px', marginBottom: 16,
+  },
+  errText: { color: '#DC2626', fontSize: 13, fontWeight: 600 },
+
+  form: { display: 'flex', flexDirection: 'column', gap: 16 },
+  twoCol: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
+
+  submitBtn: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+    padding: '13px', marginTop: 4,
+    background: 'linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)',
+    color: '#fff', border: 'none', borderRadius: 12,
+    fontSize: 15, fontWeight: 800, cursor: 'pointer',
+    boxShadow: '0 4px 20px rgba(37,99,235,0.38)',
+    transition: 'opacity 0.15s, transform 0.15s',
+    letterSpacing: '-0.01em',
+  },
+
+  footer: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    gap: 7, marginTop: 24,
+  },
+  footerText: { fontSize: 13, color: '#6B7A99' },
+  switchBtn: {
+    fontSize: 13, fontWeight: 800, color: '#2563EB',
+    background: 'none', border: 'none', cursor: 'pointer',
+    textDecoration: 'underline', textUnderlineOffset: 3,
+  },
+};
+
+const sf = {
+  field: { display: 'flex', flexDirection: 'column', gap: 6 },
+  label: { fontSize: 12.5, fontWeight: 700, color: '#374151', letterSpacing: '0.01em' },
+  input: { fontSize: 14, borderRadius: 10 },
 };

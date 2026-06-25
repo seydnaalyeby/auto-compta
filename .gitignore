@@ -26,6 +26,7 @@ MANIFEST
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+backend/desktop_data/
 
 # Virtual Environment
 venv/
@@ -79,16 +80,19 @@ logs/
 # Database
 *.db
 *.sqlite
+*.sqlite3
 
 # Environment variables
 .env
 .env.*
 !.env.example
+!backend/.env.desktop.example
 
 # Build outputs
 build/
 dist/
 out/
+web/electron/dist/
 
 # Temporary files
 tmp/

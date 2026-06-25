@@ -6,6 +6,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+import traceback
 from .services import calculate_all_indicators, calculate_indicators_with_ai
 
 
@@ -82,7 +83,7 @@ def calculate_financial_indicators(request):
         )
     except Exception as e:
         return Response(
-            {'error': 'Internal server error'},
+            {'error': f'Internal server error: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -142,7 +143,8 @@ def calculate_financial_indicators_ai(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     except Exception as e:
+        traceback.print_exc()
         return Response(
-            {'error': 'Internal server error'},
+            {'error': f'Internal server error: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

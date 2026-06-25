@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status
 import base64
 from .service import corriger_document, analyser_operation
-from apps.operations.models import Operation
+from apps.operations.models import Operation, EcritureComptable
 from decimal import Decimal
 from django.utils import timezone
 
@@ -87,6 +87,7 @@ def saisir_operation_ai(request):
                 
         operation = Operation.objects.create(
             utilisateur=request.user,
+            texte_original=texte,
             type_operation=analyse['type_operation'],
             description=analyse['description'],
             montant=Decimal(str(analyse['montant'])),
@@ -94,6 +95,17 @@ def saisir_operation_ai(request):
             categorie=analyse.get('categorie', ''),
             date_operation=operation_date,
             traitee_par_ia=True
+        )
+
+        EcritureComptable.objects.create(
+            operation=operation,
+            compte_debit=analyse.get('compte_debit', ''),
+            libelle_debit=analyse.get('libelle_debit', ''),
+            compte_credit=analyse.get('compte_credit', ''),
+            libelle_credit=analyse.get('libelle_credit', ''),
+            montant=Decimal(str(analyse['montant'])),
+            date_ecriture=operation_date,
+            libelle=analyse['description'],
         )
 
         return Response({
